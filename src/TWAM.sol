@@ -6,6 +6,10 @@ import {SafeCastLib} from "solmate/utils/SafeCastLib.sol";
 import {IERC20} from "./interfaces/IERC20.sol";
 import {IERC721} from "./interfaces/IERC721.sol";
 
+////////////////////////////////////////////////////
+///                 CUSTOM ERRORS                ///
+////////////////////////////////////////////////////
+
 /// Invalid Session
 /// @param sessionId The session's id
 error InvalidSession(uint256 sessionId);
@@ -37,6 +41,22 @@ error MintingNotOver(uint256 blockNumber, uint64 mintingEnd);
 /// @param sender The msg sender
 /// @param coordinator The expected session coordinator
 error InvalidCoordinator(address sender, address coordinator);
+
+/// Require Owner
+/// @param sender The msg sender
+/// @param owner The expected owner
+error RequireOwner(address sender, address owner);
+
+/// Bad Session Bounds
+/// @param allocationStart The session's allocation period start
+/// @param allocationEnd The session's allocation period end
+/// @param mintingStart The session's minting period start
+/// @param mintingEnd The session's minting period end
+error BadSessionBounds(uint64 allocationStart, uint64 allocationEnd, uint64 mintingStart, uint64 mintingEnd);
+
+////////////////////////////////////////////////////
+///                     TWAM                     ///
+////////////////////////////////////////////////////
 
 /// @title TWAM
 /// @notice Time Weighted Asset Mints
@@ -111,7 +131,18 @@ contract TWAM {
     uint256 maxMintingAmount,
     uint256 rolloverOption
   ) public {
-    require(msg.sender == owner);
+    // Only the TWAM owner can create a session, for now
+    if (msg.sender != owner) revert RequireOwner(msg.sender, owner);
+
+    // Validate Session Bounds
+    if (
+      allocationStart > allocationEnd
+      || mintingStart > mintingEnd
+      || mintingStart < allocationEnd
+    ) {
+      revert BadSessionBounds(allocationStart, allocationEnd, mintingStart, mintingEnd);
+    }
+
     uint256 currentSessionId = nextSessionId;
     nextSessionId += 1;
     sessions[currentSessionId] = Session(
@@ -303,5 +334,16 @@ contract TWAM {
     deposits[msg.sender][sessionId] -= amount;
     sess.depositAmount -= amount;
     IERC20(sess.depositToken).transferFrom(address(this), msg.sender, amount);
+  }
+
+  ////////////////////////////////////////////////////
+  ///            SESSION MINTING PERIOD            ///
+  ////////////////////////////////////////////////////
+
+  /// @notice Helper function to get a session
+  /// @param sessionId The uint256 session identifier
+  /// @return A Session Object
+  function getSession(uint256 sessionId) external returns(Session memory) {
+    return sessions[sessionId];
   }
 }
