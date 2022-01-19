@@ -25,6 +25,11 @@ error NonMinting(uint256 blockNumber, uint256 mintingStart, uint256 mintingEnd);
 /// @param amount The amount a user want's to mint with
 error InsufficientDesposits(address sender, uint256 deposits, uint256 amount);
 
+/// The Minting Period is not Over
+/// @param blockNumber The current block.number
+/// @param mintingEnd When the session minting period ends
+error MintingNotOver(uint64 blockNumber, uint64 mintingEnd);
+
 /// @title TWAM
 /// @notice Time Weighted Asset Mints
 /// @author Andreas Bigger <andreas@nascent.xyz>
@@ -71,6 +76,10 @@ contract TWAM {
 
   /// @notice Maps a user and session id to their deposits
   mapping(address => mapping(uint256 => uint256)) public deposits;
+
+  /// @notice Session Rewards for Coordinators
+  /// @dev Maps coordinator => token => rewardAmount
+  mapping(address => mapping(address => uint256)) private rewards;
 
   constructor() {
     owner = msg.sender;
@@ -119,7 +128,12 @@ contract TWAM {
     Session storage sess = sessions[sessionId];
 
     if (msg.sender != sess.coordinator) {
-      InvalidCoordinator(msg.sender, sess.coordinator);
+      revert InvalidCoordinator(msg.sender, sess.coordinator);
+    }
+
+    // Require Minting to be complete
+    if (block.number < sess.mintingEnd) {
+      revert MintingNotOver(block.number, sess.mintingEnd);
     }
 
     // Rollover Options
@@ -131,11 +145,29 @@ contract TWAM {
       sess.mintingEnd = type(uint64).max;
     }
     if(sess.rolloverOption == 1) {
+      uint64 allocationPeriod = sess.allocationEnd - sess.allocationStart;
+      uint64 cooldownPeriod = sess.mintingStart - sess.allocationEnd;
+      uint64 mintingPeriod = sess.mintingEnd - sess.mintingStart;
 
+      // Reset allocation period
+      sess.allocationStart = block.number;
+      sess.allocationEnd = allocationPeriod + block.number;
+
+      // Reset Minting period
+      sess.mintingStart = block.number + allocationPeriod + cooldownPeriod;
+      sess.mintingEnd = sess.mintingStart + mintingPeriod;
     }
 
     // Otherwise, do nothing.
     // If the session is closed, we just allow the users to withdraw
+  }
+
+  /// @notice Allows the coordinator to withdraw session rewards
+  /// @param baseToken The token to transfer to the coordinator
+  function withdrawRewards(address baseToken) public {
+    uint256 rewardAmount = rewards[msg.sender][baseToken];
+    rewards[msg.sender][baseToken] = 0; 
+    IERC20(baseToken).transferFrom(address(this), msg.sender, rewardAmount);
   }
 
   ////////////////////////////////////////////////////
@@ -228,8 +260,12 @@ contract TWAM {
       revert InsufficientDesposits(msg.sender, deposits[msg.sender][sessionId], amount);
     }
 
-
-
+    // TODO: floor?
+    uint256 numberToMint = amount / mintPrice;
+    sess.maxMintingAmount -= numberToMint;
+    deposits[msg.sender][sessionId] -= numberToMint * mintPrice;
+    IERC721(sess.token).safeTransferFrom(address(this), msg.sender, numberToMint);
+    rewards[sess.coordinator][sess.token] += numberToMint * mintPrice;
   }
 
   /// @notice Allows a user to forgo their mint allocation
