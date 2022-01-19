@@ -1,4 +1,6 @@
-# Time Weighted Asset Mints • [![tests](https://github.com/abigger87/twam/actions/workflows/tests.yml/badge.svg)](https://github.com/abigger87/twam/actions/workflows/tests.yml) [![lints](https://github.com/abigger87/twam/actions/workflows/lints.yml/badge.svg)](https://github.com/abigger87/twam/actions/workflows/lints.yml) ![GitHub](https://img.shields.io/github/license/abigger87/twam) ![GitHub package.json version](https://img.shields.io/github/package-json/v/abigger87/twam)
+# TWAM • [![tests](https://github.com/abigger87/twam/actions/workflows/tests.yml/badge.svg)](https://github.com/abigger87/twam/actions/workflows/tests.yml) [![lints](https://github.com/abigger87/twam/actions/workflows/lints.yml/badge.svg)](https://github.com/abigger87/twam/actions/workflows/lints.yml) ![GitHub](https://img.shields.io/github/license/abigger87/twam) ![GitHub package.json version](https://img.shields.io/github/package-json/v/abigger87/twam)
+
+##### _Time Weighted Asset Mints_
 
 A minting harness enabling time-weighted assets to determine minting prices.
 
