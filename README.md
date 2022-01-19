@@ -4,6 +4,8 @@ A minting harness enabling time-weighted assets to determine minting prices.
 
 ## How it works
 
+Requirements: `maxMintingAmount` number of erc721 tokens are minted to the `TWAM` contract in advance.
+
 For a given mint's `allocationPeriod` (let's use 24 hours), a given type of asset can be deposited into the [twam](./src/TWAM.sol) contract. Note: during the `allocationPeriod`, the deposit token can be withdrawn.
 
 Once the `allocationPeriod` ends, a cooldown period begins with a length of `mintingStart` - `allocationEnd`.

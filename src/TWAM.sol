@@ -7,10 +7,23 @@ import {IERC20} from "./interfaces/IERC20.sol";
 /// @param sessionId The session's id
 error InvalidSession(uint256 sessionId);
 
-/// Allocation Period is over
+/// Not during the Allocation Period
 /// @param blockNumber block.number
+/// @param allocationStart The block number that marks when the allocation starts
 /// @param allocationEnd The block number that marks when the allocation ends
-error AllocationEnded(uint256 blockNumber, uint256 allocationEnd);
+error NonAllocation(uint256 blockNumber, uint256 allocationStart, uint256 allocationEnd);
+
+/// Not during the Minting Period
+/// @param blockNumber block.number
+/// @param mintingStart The block number that marks when the minting period starts
+/// @param mintingEnd The block number that marks when the minting period ends
+error NonMinting(uint256 blockNumber, uint256 mintingStart, uint256 mintingEnd);
+
+/// Make sure the sender has enough deposits
+/// @param sender The message sender
+/// @param deposits The user's deposits in the session
+/// @param amount The amount a user want's to mint with
+error InsufficientDesposits(address sender, uint256 deposits, uint256 amount);
 
 /// @title TWAM
 /// @notice Time Weighted Asset Mints
@@ -94,8 +107,39 @@ contract TWAM {
     );
   }
 
+  /// @notice Allows the coordinator to rollover 
+  /// @notice Requires the minting period to be over
+  function rollover(uint256 sessionId) public {
+    // Make sure the session is valid
+    if (sessionId >= nextSessionId || sessions[sessionId].token == 0) {
+      revert InvalidSession(sessionId);
+    }
+
+    // Get the session
+    Session storage sess = sessions[sessionId];
+
+    if (msg.sender != sess.coordinator) {
+      InvalidCoordinator(msg.sender, sess.coordinator);
+    }
+
+    // Rollover Options
+    // 1. Restart the twam
+    // 2. Mint at resulting price or minimum if not reached
+    // 3. Close Session
+    if(sess.rolloverOption == 2) {
+      // We can just make the mintingEnd the maximum number
+      sess.mintingEnd = type(uint64).max;
+    }
+    if(sess.rolloverOption == 1) {
+
+    }
+
+    // Otherwise, do nothing.
+    // If the session is closed, we just allow the users to withdraw
+  }
+
   ////////////////////////////////////////////////////
-  ///           SESSION INTERACTION LOGIC          ///
+  ///           SESSION ALLOCATION PERIOD          ///
   ////////////////////////////////////////////////////
 
   /// @notice Deposit a deposit token into a session
@@ -111,9 +155,9 @@ contract TWAM {
     // Get the session
     Session storage sess = sessions[sessionId];
 
-    // Make sure the session is not in the minting period
-    if (block.number > sess.allocationEnd) {
-      revert AllocationEnded(block.number, sess.allocationEnd);
+    // Make sure the session is in the allocation period
+    if (block.number > sess.allocationEnd || block.number < see.allocationStart) {
+      revert NonAllocation(block.number, sess.allocationStart, sess.allocationEnd);
     }
 
     // Transfer the token to this contract
@@ -136,9 +180,13 @@ contract TWAM {
     // Get the session
     Session storage sess = sessions[sessionId];
 
-    // Make sure the session is not after the allocation end
-    if (block.number > sess.allocationEnd) {
-      revert AllocationEnded(block.number, sess.allocationEnd);
+    // Make sure the session is in the allocation period
+    if (
+      (block.number > sess.allocationEnd || block.number < see.allocationStart)
+      &&
+      (block.number < sess.mintingEnd || sess.rolloverOption != 3) // Allows a user to withdraw deposits if session ends
+      ) {
+      revert NonAllocation(block.number, sess.allocationStart, sess.allocationEnd);
     }
 
     // Update the user's deposit amount and total session deposits
@@ -148,5 +196,69 @@ contract TWAM {
 
     // Transfer the token to this contract
     IERC20(sess.token).transferFrom(address(this), msg.sender, amount);
+  }
+
+  ////////////////////////////////////////////////////
+  ///            SESSION MINTING PERIOD            ///
+  ////////////////////////////////////////////////////
+
+  /// @notice Mints tokens during minting period
+  /// @param sessionId The session Id
+  /// @param amount The amount of deposits to mint with
+  function mint(uint256 sessionId, uint256 amount) public {
+    // Make sure the session is valid
+    if (sessionId >= nextSessionId || sessions[sessionId].token == 0) {
+      revert InvalidSession(sessionId);
+    }
+
+    // Get the session
+    Session storage sess = sessions[sessionId];
+
+    // Make sure the session is in the minting period
+    if (block.number > sess.mintingEnd || block.number < see.mintingStart) {
+      revert NonMinting(block.number, sess.mintingStart, sess.mintingEnd);
+    }
+
+    // Calculate the mint price
+    uint256 resultPrice = sess.depositAmount / sess.maxMintingAmount;
+    uint256 mintPrice = resultPrice > sess.minPrice ? resultPrice : sess.minPrice;
+
+    // Make sure the user has enough deposits and can mint
+    if (deposits[msg.sender][sessionId] < amount || amount < mintPrice) {
+      revert InsufficientDesposits(msg.sender, deposits[msg.sender][sessionId], amount);
+    }
+
+
+
+  }
+
+  /// @notice Allows a user to forgo their mint allocation
+  /// @param sessionId The session Id
+  /// @param amount The amount of deposits to withdraw
+  function forgo(uint256 sessionId, uint256 amount) public {
+    // Make sure the session is valid
+    if (sessionId >= nextSessionId || sessions[sessionId].token == 0) {
+      revert InvalidSession(sessionId);
+    }
+
+    // Get the session
+    Session memory sess = sessions[sessionId];
+
+    // Make sure the session is in the minting period
+    if (block.number > sess.mintingEnd || block.number < see.mintingStart) {
+      revert NonMinting(block.number, sess.mintingStart, sess.mintingEnd);
+    }
+
+    // Calculate the mint price
+    uint256 resultPrice = sess.depositAmount / sess.maxMintingAmount;
+    uint256 mintPrice = resultPrice > sess.minPrice ? resultPrice : sess.minPrice;
+
+    // Make sure the user has enough deposits and can mint
+    if (deposits[msg.sender][sessionId] < amount || amount < mintPrice) {
+      revert InsufficientDesposits(msg.sender, deposits[msg.sender][sessionId], amount);
+    }
+
+
+
   }
 }
