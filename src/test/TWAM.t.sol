@@ -161,6 +161,43 @@ contract TWAMTest is DSTestPlus, stdCheats {
 
     /// @notice Tests rolling over a session
     function testRollover() public {
+        uint64 blockNumber = SafeCastLib.safeCastTo64(block.number);
+
+        // Expect Revert for an invalid sessionId
+        vm.expectRevert(abi.encodeWithSignature("InvalidSession(uint256)", 0));
+        twam.rollover(0);
+
+        // Create a valid session
+        twam.createSession(
+            address(mockToken),
+            COORDINATOR,
+            blockNumber + 10, // allocationStart,
+            blockNumber + 15, // allocationEnd,
+            blockNumber + 20, // mintingStart,
+            blockNumber + 25, // mintingEnd,
+            100, // minPrice,
+            address(depositToken),
+            TOKEN_SUPPLY, // maxMintingAmount,
+            1 // rolloverOption
+        );
+
+        // Expect Revert when not called from the coordinator context
+        vm.expectRevert(abi.encodeWithSignature("InvalidCoordinator(address,address)", address(this), COORDINATOR));
+        twam.rollover(0);
+
+        // Hoax from the COORDINATOR context
+        startHoax(COORDINATOR, COORDINATOR, type(uint256).max);
+
+        // Expect Revert when the mint isn't over
+        vm.expectRevert(abi.encodeWithSignature("MintingNotOver(uint256,uint64)", blockNumber, blockNumber + 25));
+        twam.rollover(0);
+
+        vm.warp(block.timestamp + 1000);
+
+        // The rollover should succeed now that the minting period is over
+        twam.rollover(0);
+
+        vm.stopPrank();
     }
 
 }
