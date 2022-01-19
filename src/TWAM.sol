@@ -68,10 +68,30 @@ contract TWAM {
   ////////////////////////////////////////////////////
 
   /// @notice Creates a new twam session
+  /// @dev Only the owner can create a twam session
   function createSession(
-
+    address token,
+    address coordinator,
+    uint64 allocationStart,
+    uint64 allocationEnd,
+    uint64 mintingStart,
+    uint64 mintingEnd,
+    uint256 minPrice,
+    address depositToken,
+    uint256 maxMintingAmount,
+    uint256 rolloverOption
   ) public {
     require(msg.sender == owner);
+    uint256 currentSessionId = nextSessionId;
+    nextSessionId += 1;
+    sessions[currentSessionId] = Session(
+      token, coordinator, allocationStart, allocationEnd,
+      mintingStart, mintingEnd,
+      0, // resultPrice
+      minPrice, depositToken,
+      0, // depositAmount
+      maxMintingAmount, rolloverOption
+    );
   }
 
   ////////////////////////////////////////////////////
