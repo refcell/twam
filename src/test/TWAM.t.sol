@@ -192,7 +192,8 @@ contract TWAMTest is DSTestPlus, stdCheats {
         vm.expectRevert(abi.encodeWithSignature("MintingNotOver(uint256,uint64)", blockNumber, blockNumber + 25));
         twam.rollover(0);
 
-        vm.warp(block.timestamp + 1000);
+        // Roll the block height
+        vm.roll(blockNumber + 25);
 
         // The rollover should succeed now that the minting period is over
         twam.rollover(0);
