@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.11;
 
+import {SafeCastLib} from "solmate/utils/SafeCastLib.sol";
+
 import {IERC20} from "./interfaces/IERC20.sol";
+import {IERC721} from "./interfaces/IERC721.sol";
 
 /// Invalid Session
 /// @param sessionId The session's id
@@ -28,7 +31,12 @@ error InsufficientDesposits(address sender, uint256 deposits, uint256 amount);
 /// The Minting Period is not Over
 /// @param blockNumber The current block.number
 /// @param mintingEnd When the session minting period ends
-error MintingNotOver(uint64 blockNumber, uint64 mintingEnd);
+error MintingNotOver(uint256 blockNumber, uint64 mintingEnd);
+
+/// Invalid Coordinator
+/// @param sender The msg sender
+/// @param coordinator The expected session coordinator
+error InvalidCoordinator(address sender, address coordinator);
 
 /// @title TWAM
 /// @notice Time Weighted Asset Mints
@@ -120,7 +128,7 @@ contract TWAM {
   /// @notice Requires the minting period to be over
   function rollover(uint256 sessionId) public {
     // Make sure the session is valid
-    if (sessionId >= nextSessionId || sessions[sessionId].token == 0) {
+    if (sessionId >= nextSessionId || sessions[sessionId].token == address(0)) {
       revert InvalidSession(sessionId);
     }
 
@@ -150,11 +158,11 @@ contract TWAM {
       uint64 mintingPeriod = sess.mintingEnd - sess.mintingStart;
 
       // Reset allocation period
-      sess.allocationStart = block.number;
-      sess.allocationEnd = allocationPeriod + block.number;
+      sess.allocationStart = SafeCastLib.safeCastTo64(block.number);
+      sess.allocationEnd = allocationPeriod + SafeCastLib.safeCastTo64(block.number);
 
       // Reset Minting period
-      sess.mintingStart = block.number + allocationPeriod + cooldownPeriod;
+      sess.mintingStart = SafeCastLib.safeCastTo64(block.number) + allocationPeriod + cooldownPeriod;
       sess.mintingEnd = sess.mintingStart + mintingPeriod;
     }
 
@@ -180,7 +188,7 @@ contract TWAM {
   /// @param amount The amount of the deposit token to deposit
   function deposit(uint256 sessionId, uint256 amount) public {
     // Make sure the session is valid
-    if (sessionId >= nextSessionId || sessions[sessionId].token == 0) {
+    if (sessionId >= nextSessionId || sessions[sessionId].token == address(0)) {
       revert InvalidSession(sessionId);
     }
 
@@ -188,7 +196,7 @@ contract TWAM {
     Session storage sess = sessions[sessionId];
 
     // Make sure the session is in the allocation period
-    if (block.number > sess.allocationEnd || block.number < see.allocationStart) {
+    if (block.number > sess.allocationEnd || block.number < sess.allocationStart) {
       revert NonAllocation(block.number, sess.allocationStart, sess.allocationEnd);
     }
 
@@ -205,7 +213,7 @@ contract TWAM {
   /// @param amount The amount of the deposit token to withdraw
   function withdraw(uint256 sessionId, uint256 amount) public {
     // Make sure the session is valid
-    if (sessionId >= nextSessionId || sessions[sessionId].token == 0) {
+    if (sessionId >= nextSessionId || sessions[sessionId].token == address(0)) {
       revert InvalidSession(sessionId);
     }
 
@@ -214,7 +222,7 @@ contract TWAM {
 
     // Make sure the session is in the allocation period
     if (
-      (block.number > sess.allocationEnd || block.number < see.allocationStart)
+      (block.number > sess.allocationEnd || block.number < sess.allocationStart)
       &&
       (block.number < sess.mintingEnd || sess.rolloverOption != 3) // Allows a user to withdraw deposits if session ends
       ) {
@@ -239,7 +247,7 @@ contract TWAM {
   /// @param amount The amount of deposits to mint with
   function mint(uint256 sessionId, uint256 amount) public {
     // Make sure the session is valid
-    if (sessionId >= nextSessionId || sessions[sessionId].token == 0) {
+    if (sessionId >= nextSessionId || sessions[sessionId].token == address(0)) {
       revert InvalidSession(sessionId);
     }
 
@@ -247,7 +255,7 @@ contract TWAM {
     Session storage sess = sessions[sessionId];
 
     // Make sure the session is in the minting period
-    if (block.number > sess.mintingEnd || block.number < see.mintingStart) {
+    if (block.number > sess.mintingEnd || block.number < sess.mintingStart) {
       revert NonMinting(block.number, sess.mintingStart, sess.mintingEnd);
     }
 
@@ -278,7 +286,7 @@ contract TWAM {
   /// @param amount The amount of deposits to withdraw
   function forgo(uint256 sessionId, uint256 amount) public {
     // Make sure the session is valid
-    if (sessionId >= nextSessionId || sessions[sessionId].token == 0) {
+    if (sessionId >= nextSessionId || sessions[sessionId].token == address(0)) {
       revert InvalidSession(sessionId);
     }
 
@@ -286,7 +294,7 @@ contract TWAM {
     Session storage sess = sessions[sessionId];
 
     // Make sure the session is in the minting period
-    if (block.number > sess.mintingEnd || block.number < see.mintingStart) {
+    if (block.number > sess.mintingEnd || block.number < sess.mintingStart) {
       revert NonMinting(block.number, sess.mintingStart, sess.mintingEnd);
     }
 

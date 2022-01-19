@@ -22,7 +22,7 @@ contract TWAMTest is DSTestPlus {
     function setUp() public {
         /// @dev sets address(this) as the owner of the TWAM contract
         twam = new TWAM();
-        assert(twam.owner() == address(this))
+        assert(twam.owner() == address(this));
     }
 
     ////////////////////////////////////////////////////
