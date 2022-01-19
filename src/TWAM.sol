@@ -193,7 +193,7 @@ contract TWAM {
     }
 
     // Transfer the token to this contract
-    IERC20(sess.token).transferFrom(msg.sender, address(this), amount);
+    IERC20(sess.depositToken).transferFrom(msg.sender, address(this), amount);
 
     // Update the user's deposit amount and total session deposits
     deposits[msg.sender][sessionId] += amount;
@@ -227,7 +227,7 @@ contract TWAM {
     sess.depositAmount -= amount;
 
     // Transfer the token to this contract
-    IERC20(sess.token).transferFrom(address(this), msg.sender, amount);
+    IERC20(sess.depositToken).transferFrom(address(this), msg.sender, amount);
   }
 
   ////////////////////////////////////////////////////
@@ -252,8 +252,10 @@ contract TWAM {
     }
 
     // Calculate the mint price
-    uint256 resultPrice = sess.depositAmount / sess.maxMintingAmount;
-    uint256 mintPrice = resultPrice > sess.minPrice ? resultPrice : sess.minPrice;
+    if(sess.resultPrice == 0) {
+      sess.resultPrice = sess.depositAmount / sess.maxMintingAmount;
+    }
+    uint256 mintPrice = sess.resultPrice > sess.minPrice ? sess.resultPrice : sess.minPrice;
 
     // Make sure the user has enough deposits and can mint
     if (deposits[msg.sender][sessionId] < amount || amount < mintPrice) {
@@ -264,7 +266,10 @@ contract TWAM {
     uint256 numberToMint = amount / mintPrice;
     sess.maxMintingAmount -= numberToMint;
     deposits[msg.sender][sessionId] -= numberToMint * mintPrice;
+    sess.depositAmount -= numberToMint * mintPrice;
     IERC721(sess.token).safeTransferFrom(address(this), msg.sender, numberToMint);
+
+    // Only give rewards to coordinator if the erc721 can be transferred to the user
     rewards[sess.coordinator][sess.token] += numberToMint * mintPrice;
   }
 
@@ -278,23 +283,17 @@ contract TWAM {
     }
 
     // Get the session
-    Session memory sess = sessions[sessionId];
+    Session storage sess = sessions[sessionId];
 
     // Make sure the session is in the minting period
     if (block.number > sess.mintingEnd || block.number < see.mintingStart) {
       revert NonMinting(block.number, sess.mintingStart, sess.mintingEnd);
     }
 
-    // Calculate the mint price
-    uint256 resultPrice = sess.depositAmount / sess.maxMintingAmount;
-    uint256 mintPrice = resultPrice > sess.minPrice ? resultPrice : sess.minPrice;
-
-    // Make sure the user has enough deposits and can mint
-    if (deposits[msg.sender][sessionId] < amount || amount < mintPrice) {
-      revert InsufficientDesposits(msg.sender, deposits[msg.sender][sessionId], amount);
-    }
-
-
-
+    // Remove deposits
+    // Will revert on underflow
+    deposits[msg.sender][sessionId] -= amount;
+    sess.depositAmount -= amount;
+    IERC20(sess.depositToken).transferFrom(address(this), msg.sender, amount);
   }
 }
