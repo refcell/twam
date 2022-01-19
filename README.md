@@ -69,8 +69,6 @@ make
 
 ```bash
 make test
-# OR #
-yarn test
 ```
 
 ## License
