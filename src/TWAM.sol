@@ -72,7 +72,7 @@ contract TWAM {
   mapping(uint256 => Session) public sessions;
 
   /// @dev This contract owner
-  address public owner;
+  address immutable public owner;
 
   /// @notice Maps a user and session id to their deposits
   mapping(address => mapping(uint256 => uint256)) public deposits;
