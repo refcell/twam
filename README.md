@@ -4,13 +4,24 @@ A minting harness enabling time-weighted assets to determine minting prices.
 
 ## How it works
 
-For a given mint's `allocationPeriod` (let's use 24 hours), a given type of asset can be deposited into the [twam](./src/TWAM.sol) contract.
+For a given mint's `allocationPeriod` (let's use 24 hours), a given type of asset can be deposited into the [twam](./src/TWAM.sol) contract. Note: during the `allocationPeriod`, the deposit token can be withdrawn.
 
-Once the `allocationPeriod` ends, each erc721 can be minted at the price equal to (total allocated assets) / (maximum supply erc721 tokens).
+Once the `allocationPeriod` ends, a cooldown period begins with a length of `mintingStart` - `allocationEnd`.
 
-When the `allocationPeriod` ends, the `permissionedPeriod` begins where users who deposited can mint their tokens at the price, or withdraw.
+Note: the cooldown may be 0.
 
-If not all tokens are minted at the end of the `permissondPeriod`, either the process starts over again or minting is enabled at the resulting price.
+At the beginning of the minting period `mintingStart`, each erc721 can be minted at the price equal to (total allocated assets) / (maximum supply erc721 tokens) as long as it exceeds the `minimumPrice`.
+
+If the `minimumPrice` is not reached, minting is prohibited, and nothing happens during the minting period.
+
+If all tokens are minted at the end of the minting period, the session is completed.
+
+Otherwise (when the `minimumPrice` isn't met or not all tokens are minted), one of three options are available:
+1. The TWAM process starts over again.
+2. Minting is enabled at the max{`resultPrice`, `minimumPrice`}.
+3. The session is ended.
+
+This option is denoted as the session's `rolloverOption`.
 
 ## Blueprint
 
