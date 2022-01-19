@@ -1,6 +1,16 @@
-# foundry-starter  • [![tests](https://github.com/abigger87/foundry-starter/actions/workflows/tests.yml/badge.svg)](https://github.com/abigger87/foundry-starter/actions/workflows/tests.yml) [![lints](https://github.com/abigger87/foundry-starter/actions/workflows/lints.yml/badge.svg)](https://github.com/abigger87/foundry-starter/actions/workflows/lints.yml) ![GitHub](https://img.shields.io/github/license/abigger87/foundry-starter) ![GitHub package.json version](https://img.shields.io/github/package-json/v/abigger87/foundry-starter)
+# Time Weighted Asset Mints • [![tests](https://github.com/abigger87/twam/actions/workflows/tests.yml/badge.svg)](https://github.com/abigger87/twam/actions/workflows/tests.yml) [![lints](https://github.com/abigger87/twam/actions/workflows/lints.yml/badge.svg)](https://github.com/abigger87/twam/actions/workflows/lints.yml) ![GitHub](https://img.shields.io/github/license/abigger87/twam) ![GitHub package.json version](https://img.shields.io/github/package-json/v/abigger87/twam)
 
-**Agile** Template for Foundry and DappTools Projects 
+A minting harness enabling time-weighted assets to determine minting prices.
+
+## How it works
+
+For a given mint's `allocationPeriod` (let's use 24 hours), a given type of asset can be deposited into the [twam](./src/TWAM.sol) contract.
+
+Once the `allocationPeriod` ends, each erc721 can be minted at the price equal to (total allocated assets) / (maximum supply erc721 tokens).
+
+When the `allocationPeriod` ends, the `permissionedPeriod` begins where users who deposited can mint their tokens at the price, or withdraw.
+
+If not all tokens are minted at the end of the `permissondPeriod`, either the process starts over again or minting is enabled at the resulting price.
 
 ## Blueprint
 
@@ -11,8 +21,8 @@ lib
 ├─ solmate — https://github.com/Rari-Capital/solmate
 src
 ├─ tests
-│  └─ Greeter.t — "Greeter Tests"
-└─ Greeter — "A Minimal Greeter Contract"
+│  └─ TWAM.t — "TWAM Tests"
+└─ TWAM — "Time Weighted Asset Mint Contract"
 ```
 
 ## Development
@@ -50,7 +60,7 @@ yarn test
 
 ## License
 
-[AGPL-3.0-only](https://github.com/abigger87/foundry-starter/blob/master/LICENSE)
+[AGPL-3.0-only](https://github.com/abigger87/twam/blob/master/LICENSE)
 
 # Acknowledgements
 
@@ -58,6 +68,7 @@ yarn test
 - [solmate](https://github.com/Rari-Capital/solmate)
 - [forge-std](https://github.com/brockelmore/forge-std)
 - [foundry-toolchain](https://github.com/onbjerg/foundry-toolchain) by [onbjerg](https://github.com/onbjerg).
+- [forge-starter](https://github.com/abigger87/forge-starter) by [abigger87](https://github.com/abigger87).
 - [forge-template](https://github.com/FrankieIsLost/forge-template) by [FrankieIsLost](https://github.com/FrankieIsLost).
 - [Georgios Konstantopoulos](https://github.com/gakonst) for [forge-template](https://github.com/gakonst/forge-template) resource.
 
