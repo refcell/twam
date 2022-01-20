@@ -368,4 +368,219 @@ contract TWAMTest is DSTestPlus, stdCheats {
         vm.stopPrank();
     }
 
+    /// @notice Test withdrawals
+    function testWithdrawals() public {
+        uint64 blockNumber = SafeCastLib.safeCastTo64(block.number);
+
+        // Expect Revert when session isn't created
+        vm.expectRevert(abi.encodeWithSignature("InvalidSession(uint256)", 0));
+        twam.withdraw(0, TOKEN_SUPPLY);
+
+        // Create a valid session
+        twam.createSession(
+            address(mockToken),
+            COORDINATOR,
+            blockNumber + 10, // allocationStart,
+            blockNumber + 15, // allocationEnd,
+            blockNumber + 20, // mintingStart,
+            blockNumber + 25, // mintingEnd,
+            1, // minPrice,
+            address(depositToken),
+            TOKEN_SUPPLY, // maxMintingAmount,
+            1 // rolloverOption
+        );
+
+        // Jump to after the allocation period
+        vm.roll(blockNumber + 16);
+
+        // Expect Revert when we are after the allocation period
+        vm.expectRevert(
+            abi.encodeWithSignature(
+                "NonAllocation(uint256,uint64,uint64)",
+                blockNumber + 16,
+                blockNumber + 10,
+                blockNumber + 15
+            )
+        );
+        twam.withdraw(0, TOKEN_SUPPLY);
+
+        // Reset to before the allocation period
+        vm.roll(blockNumber + 5);
+
+        // Expect Revert when we are before the allocation period
+        vm.expectRevert(
+            abi.encodeWithSignature(
+                "NonAllocation(uint256,uint64,uint64)",
+                blockNumber + 5,
+                blockNumber + 10,
+                blockNumber + 15
+            )
+        );
+        twam.withdraw(0, TOKEN_SUPPLY);
+
+        // Jump to allocation period
+        vm.roll(blockNumber + 11);
+
+        // Create Mock Users
+        address firstUser = address(1);
+        address secondUser = address(2);
+
+        // Give them depositToken balances
+        depositToken.mint(firstUser, 1e18);
+        depositToken.mint(secondUser, 1e18);
+
+        // Mock first user deposits and withdrawals
+        startHoax(firstUser, firstUser, type(uint256).max);
+        depositToken.approve(address(twam), 1e18); // Approve the TWAM to transfer the depositToken
+        twam.deposit(0, TOKEN_SUPPLY);
+        assert(depositToken.balanceOf(address(twam)) == TOKEN_SUPPLY);
+        twam.withdraw(0, TOKEN_SUPPLY);
+        assert(depositToken.balanceOf(address(twam)) == 0);
+        vm.stopPrank();
+
+        // Mock second user deposits and withdrawals
+        startHoax(secondUser, secondUser, type(uint256).max);
+        depositToken.approve(address(twam), 1e18); // Approve the TWAM to transfer the depositToken
+        twam.deposit(0, TOKEN_SUPPLY);
+        assert(depositToken.balanceOf(address(twam)) == TOKEN_SUPPLY);
+        twam.withdraw(0, TOKEN_SUPPLY);
+        assert(depositToken.balanceOf(address(twam)) == 0);
+        vm.stopPrank();
+    }
+
+    /// @notice Tests users can withdraw after minting ends when session rollover = 3
+    function testWithdrawRollover3() public {
+        uint64 blockNumber = SafeCastLib.safeCastTo64(block.number);
+
+        // Create a valid session
+        twam.createSession(
+            address(mockToken),
+            COORDINATOR,
+            blockNumber + 10, // allocationStart,
+            blockNumber + 15, // allocationEnd,
+            blockNumber + 20, // mintingStart,
+            blockNumber + 25, // mintingEnd,
+            1, // minPrice,
+            address(depositToken),
+            TOKEN_SUPPLY, // maxMintingAmount,
+            3 // rolloverOption
+        );
+
+        // Jump to allocation period
+        vm.roll(blockNumber + 11);
+
+        // Create Mock Users
+        address firstUser = address(1);
+        depositToken.mint(firstUser, 1e18);
+
+        // Mock user deposits
+        startHoax(firstUser, firstUser, type(uint256).max);
+        depositToken.approve(address(twam), 1e18); // Approve the TWAM to transfer the depositToken
+        twam.deposit(0, TOKEN_SUPPLY);
+        assert(depositToken.balanceOf(address(twam)) == TOKEN_SUPPLY);
+        vm.stopPrank();
+
+        // Jump to after the mint period
+        vm.roll(blockNumber + 26);
+
+        // Mock user withdrawal
+        startHoax(firstUser, firstUser, type(uint256).max);
+        assert(depositToken.balanceOf(address(twam)) == TOKEN_SUPPLY);
+        twam.withdraw(0, TOKEN_SUPPLY);
+        assert(depositToken.balanceOf(address(twam)) == 0);
+        vm.stopPrank();
+    }
+
+    ////////////////////////////////////////////////////
+    ///            SESSION MINTING PERIOD            ///
+    ////////////////////////////////////////////////////
+
+    /// @notice Tests minting period
+    function testMints() public {
+        // TODO: //
+    }
+
+    /// @notice Tests forgoing a mint
+    function testForgo() public {
+        // TODO: //
+    }
+
+    ////////////////////////////////////////////////////
+    ///            SESSION MINTING PERIOD            ///
+    ////////////////////////////////////////////////////
+
+    /// @notice Tests can fetch sessions by Id
+    function testGetSession() public {
+        uint64 bn = SafeCastLib.safeCastTo64(block.number);
+
+        // This should be an empty session since none have been created
+        TWAM.Session memory sess = twam.getSession(0);
+        // Validate Session Parameters
+        assert(sess.token == address(0));
+        assert(sess.coordinator == address(0));
+        assert(sess.allocationStart == 0);
+        assert(sess.allocationEnd == 0);
+        assert(sess.mintingStart == 0);
+        assert(sess.mintingEnd == 0);
+        assert(sess.resultPrice == 0);
+        assert(sess.minPrice == 0);
+        assert(sess.depositToken == address(0));
+        assert(sess.depositAmount == 0);
+        assert(sess.maxMintingAmount == 0);
+        assert(sess.rolloverOption == 0);
+
+        // Create multiple valid sessions
+        twam.createSession(
+            address(mockToken),
+            COORDINATOR,
+            bn + 10,
+            bn + 15,
+            bn + 20,
+            bn + 25,
+            1,
+            address(depositToken),
+            TOKEN_SUPPLY,
+            3
+        );
+        twam.createSession(
+            address(mockToken),
+            COORDINATOR,
+            bn + 20,
+            bn + 25,
+            bn + 30,
+            bn + 35,
+            2,
+            address(depositToken),
+            TOKEN_SUPPLY,
+            2
+        );
+
+        // Validate that we can read these session parameters corectly
+        TWAM.Session memory sess2 = twam.getSession(0);
+        assert(sess2.token == address(mockToken));
+        assert(sess2.coordinator == COORDINATOR);
+        assert(sess2.allocationStart == bn + 10);
+        assert(sess2.allocationEnd == bn + 15);
+        assert(sess2.mintingStart == bn + 20);
+        assert(sess2.mintingEnd == bn + 25);
+        assert(sess2.resultPrice == 0);
+        assert(sess2.minPrice == 1);
+        assert(sess2.depositToken == address(depositToken));
+        assert(sess2.depositAmount == 0);
+        assert(sess2.maxMintingAmount == TOKEN_SUPPLY);
+        assert(sess2.rolloverOption == 3);
+        TWAM.Session memory sess3 = twam.getSession(1);
+        assert(sess3.token == address(mockToken));
+        assert(sess3.coordinator == COORDINATOR);
+        assert(sess3.allocationStart == bn + 20);
+        assert(sess3.allocationEnd == bn + 25);
+        assert(sess3.mintingStart == bn + 30);
+        assert(sess3.mintingEnd == bn + 35);
+        assert(sess3.resultPrice == 0);
+        assert(sess3.minPrice == 2);
+        assert(sess3.depositToken == address(depositToken));
+        assert(sess3.depositAmount == 0);
+        assert(sess3.maxMintingAmount == TOKEN_SUPPLY);
+        assert(sess3.rolloverOption == 2);
+    }
 }
