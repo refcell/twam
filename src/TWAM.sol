@@ -318,7 +318,7 @@ contract TWAM {
       revert InsufficientDesposits(msg.sender, deposits[msg.sender][sessionId], amount);
     }
 
-    // TODO: floor?
+    // Calculate mint amount and transfer
     uint256 numberToMint = amount / mintPrice;
     sess.maxMintingAmount -= numberToMint;
     deposits[msg.sender][sessionId] -= numberToMint * mintPrice;
