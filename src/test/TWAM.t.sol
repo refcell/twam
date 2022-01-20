@@ -2,11 +2,12 @@
 pragma solidity 0.8.11;
 
 
-import {stdCheats, stdError} from "forge-std/stdlib.sol";
-import {Vm} from "forge-std/Vm.sol";
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockERC721} from "solmate/test/utils/mocks/MockERC721.sol";
-import {SafeCastLib} from "solmate/utils/SafeCastLib.sol";
+import {stdCheats, stdError} from "@std/stdlib.sol";
+import {Vm} from "@std/Vm.sol";
+
+import {MockERC20} from "@solmate/test/utils/mocks/MockERC20.sol";
+import {MockERC721} from "@solmate/test/utils/mocks/MockERC721.sol";
+import {SafeCastLib} from "@solmate/utils/SafeCastLib.sol";
 
 import {DSTestPlus} from "./utils/DSTestPlus.sol";
 import {TWAM} from "../TWAM.sol";

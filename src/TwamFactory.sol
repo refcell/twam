@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.11;
 
-import {ERC721TokenReceiver} from "solmate/tokens/ERC721.sol";
+import {ERC721TokenReceiver} from "@solmate/tokens/ERC721.sol";
+import {ClonesWithImmutableArgs} from "@clones/ClonesWithImmutableArgs.sol";
 
 import {TwamBase} from "./TwamBase.sol";
-import {ClonesWithCallData} from "./lib/ClonesWithCallData.sol";
 
 ////////////////////////////////////////////////////
 ///                 CUSTOM ERRORS                ///

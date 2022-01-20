@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.11;
 
-import {SafeCastLib} from "solmate/utils/SafeCastLib.sol";
+import {SafeCastLib} from "@solmate/utils/SafeCastLib.sol";
+import {Clone} from "@clones/Clone.sol";
 
 import {IERC20} from "./interfaces/IERC20.sol";
 import {IERC721} from "./interfaces/IERC721.sol";
@@ -49,7 +50,7 @@ error InvalidCoordinator(address sender, address coordinator);
 /// @title TwamBase
 /// @notice Time Weighted Asset Mints
 /// @author Andreas Bigger <andreas@nascent.xyz>
-contract TwamBase {
+contract TwamBase is Clone {
 
   /// @dev The next session id
   uint256 private nextSessionId;
