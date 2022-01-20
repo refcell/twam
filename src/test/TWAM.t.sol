@@ -55,6 +55,50 @@ contract TWAMTest is DSTestPlus, stdCheats {
     ///           SESSION MANAGEMENT LOGIC           ///
     ////////////////////////////////////////////////////
 
+    /// @notice Test prevent duplicate sessions
+    /// @dev I know this is an anti-pattern @brockelmore :p
+    function testCantCreateDuplicateSessions() public {
+        uint64 bn = SafeCastLib.safeCastTo64(block.number);
+
+        // Hoax the sender and tx.origin
+        address new_sender = address(1337);
+        startHoax(new_sender, new_sender, type(uint256).max);
+
+        // Expect Revert for address 0
+        vm.expectRevert(
+            abi.encodeWithSignature(
+                "DuplicateSession(address,address)",
+                new_sender,
+                0
+            )
+        );
+        twam.createSession(
+            address(0), COORDINATOR, bn + 10, bn + 15,
+            bn + 20, bn + 25, 100, address(depositToken), TOKEN_SUPPLY, 1
+        );
+
+        // Create a valid session
+        twam.createSession(
+            address(mockToken), COORDINATOR, bn + 10, bn + 15,
+            bn + 20, bn + 25, 100, address(depositToken), TOKEN_SUPPLY, 1
+        );
+
+        // Expect Revert for duplicate address
+        vm.expectRevert(
+            abi.encodeWithSignature(
+                "DuplicateSession(address,address)",
+                new_sender,
+                address(mockToken)
+            )
+        );
+        twam.createSession(
+            address(mockToken), COORDINATOR, bn + 10, bn + 15,
+            bn + 20, bn + 25, 100, address(depositToken), TOKEN_SUPPLY, 1
+        );
+
+        vm.stopPrank();
+    }
+
     /// @notice test creating a twam session
     function testCreateSession() public {
         uint64 blockNumber = SafeCastLib.safeCastTo64(block.number);
@@ -693,18 +737,6 @@ contract TWAMTest is DSTestPlus, stdCheats {
             TOKEN_SUPPLY,
             3
         );
-        twam.createSession(
-            address(mockToken),
-            COORDINATOR,
-            bn + 20,
-            bn + 25,
-            bn + 30,
-            bn + 35,
-            2,
-            address(depositToken),
-            TOKEN_SUPPLY,
-            2
-        );
 
         // Validate that we can read these session parameters corectly
         TWAM.Session memory sess2 = twam.getSession(0);
@@ -720,18 +752,5 @@ contract TWAMTest is DSTestPlus, stdCheats {
         assert(sess2.depositAmount == 0);
         assert(sess2.maxMintingAmount == TOKEN_SUPPLY);
         assert(sess2.rolloverOption == 3);
-        TWAM.Session memory sess3 = twam.getSession(1);
-        assert(sess3.token == address(mockToken));
-        assert(sess3.coordinator == COORDINATOR);
-        assert(sess3.allocationStart == bn + 20);
-        assert(sess3.allocationEnd == bn + 25);
-        assert(sess3.mintingStart == bn + 30);
-        assert(sess3.mintingEnd == bn + 35);
-        assert(sess3.resultPrice == 0);
-        assert(sess3.minPrice == 2);
-        assert(sess3.depositToken == address(depositToken));
-        assert(sess3.depositAmount == 0);
-        assert(sess3.maxMintingAmount == TOKEN_SUPPLY);
-        assert(sess3.rolloverOption == 2);
     }
 }

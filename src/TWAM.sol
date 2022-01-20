@@ -14,6 +14,11 @@ import {IERC721} from "./interfaces/IERC721.sol";
 /// @param sessionId The session's id
 error InvalidSession(uint256 sessionId);
 
+/// Duplicate Session
+/// @param sender The message sender
+/// @param token The address of the ERC721 Token
+error DuplicateSession(address sender, address token);
+
 /// Not during the Allocation Period
 /// @param blockNumber block.number
 /// @param allocationStart The block number that marks when the allocation starts
@@ -100,6 +105,9 @@ contract TWAM {
   /// @dev Maps session ids to sessions
   mapping(uint256 => Session) public sessions;
 
+  /// @dev Maps ERC721 to if their session exists
+  mapping(address => bool) public sessionExists;
+
   /// @dev This contract owner
   address immutable public owner;
 
@@ -146,6 +154,10 @@ contract TWAM {
     uint256 maxMintingAmount,
     uint256 rolloverOption
   ) public {
+    // Prevent Overwriting Sessions
+    if(sessionExists[token] || token == address(0)) {
+      revert DuplicateSession(msg.sender, token);
+    }
     // To allow permissionless session creation, the erc721 tokens must be minted or transferred to this contract
     // This can be enabled efficiently by setting the ERC721.balanceOf(address(TWAM)) to the maxMintingAmount on erc721 contract deployment
     uint256 balanceOfThis = IERC721(token).balanceOf(address(this));
@@ -162,6 +174,7 @@ contract TWAM {
 
     uint256 currentSessionId = nextSessionId;
     nextSessionId += 1;
+    sessionExists[token] = true;
     sessions[currentSessionId] = Session(
       token, coordinator, allocationStart, allocationEnd,
       mintingStart, mintingEnd,
