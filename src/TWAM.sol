@@ -18,13 +18,13 @@ error InvalidSession(uint256 sessionId);
 /// @param blockNumber block.number
 /// @param allocationStart The block number that marks when the allocation starts
 /// @param allocationEnd The block number that marks when the allocation ends
-error NonAllocation(uint256 blockNumber, uint256 allocationStart, uint256 allocationEnd);
+error NonAllocation(uint256 blockNumber, uint64 allocationStart, uint64 allocationEnd);
 
 /// Not during the Minting Period
 /// @param blockNumber block.number
 /// @param mintingStart The block number that marks when the minting period starts
 /// @param mintingEnd The block number that marks when the minting period ends
-error NonMinting(uint256 blockNumber, uint256 mintingStart, uint256 mintingEnd);
+error NonMinting(uint256 blockNumber, uint64 mintingStart, uint64 mintingEnd);
 
 /// Make sure the sender has enough deposits
 /// @param sender The message sender
@@ -42,10 +42,11 @@ error MintingNotOver(uint256 blockNumber, uint64 mintingEnd);
 /// @param coordinator The expected session coordinator
 error InvalidCoordinator(address sender, address coordinator);
 
-/// Require Owner
-/// @param sender The msg sender
-/// @param owner The expected owner
-error RequireOwner(address sender, address owner);
+/// Require the ERC721 tokens to already be transferred to the twam contract
+/// Enables permissionless session creation
+/// @param balanceOfThis The ERC721 balance of the twam contract
+/// @param maxMintingAmount The maxmum number of ERC721s to mint
+error RequireMintedERC721Tokens(uint256 balanceOfThis, uint256 maxMintingAmount);
 
 /// Bad Session Bounds
 /// @param allocationStart The session's allocation period start
@@ -107,7 +108,10 @@ contract TWAM {
 
   /// @notice Session Rewards for Coordinators
   /// @dev Maps coordinator => token => rewardAmount
-  mapping(address => mapping(address => uint256)) private rewards;
+  mapping(address => mapping(address => uint256)) public rewards;
+
+  /// @notice Token Ids for the ERC721s
+  mapping(address => uint256) private tokenIds;
 
   constructor() {
     owner = msg.sender;
@@ -118,7 +122,18 @@ contract TWAM {
   ////////////////////////////////////////////////////
 
   /// @notice Creates a new twam session
-  /// @dev Only the owner can create a twam session
+  /// @dev This function is permissionless since we require
+  /// @dev maxMintingAmount of `token` to be minted to this contract
+  /// @param token The ERC721 Token
+  /// @param coordinator The session coordinator who controls the session
+  /// @param allocationStart When the allocation period begins
+  /// @param allocationEnd When the allocation period ends
+  /// @param mintingStart When the minting period begins
+  /// @param mintingEnd When the minting period ends
+  /// @param minPrice The minimum token price for minting
+  /// @param depositToken The token to pay for minting
+  /// @param maxMintingAmount The maximum amount of tokens to mint (must be minted to this contract)
+  /// @param rolloverOption What happens when the minting period ends and the session is over; one of {1, 2, 3}
   function createSession(
     address token,
     address coordinator,
@@ -131,8 +146,10 @@ contract TWAM {
     uint256 maxMintingAmount,
     uint256 rolloverOption
   ) public {
-    // Only the TWAM owner can create a session, for now
-    if (msg.sender != owner) revert RequireOwner(msg.sender, owner);
+    // To allow permissionless session creation, the erc721 tokens must be minted or transferred to this contract
+    // This can be enabled efficiently by setting the ERC721.balanceOf(address(TWAM)) to the maxMintingAmount on erc721 contract deployment
+    uint256 balanceOfThis = IERC721(token).balanceOf(address(this));
+    if (balanceOfThis < maxMintingAmount) revert RequireMintedERC721Tokens(balanceOfThis, maxMintingAmount);
 
     // Validate Session Bounds
     if (
@@ -206,7 +223,7 @@ contract TWAM {
   function withdrawRewards(address baseToken) public {
     uint256 rewardAmount = rewards[msg.sender][baseToken];
     rewards[msg.sender][baseToken] = 0; 
-    IERC20(baseToken).transferFrom(address(this), msg.sender, rewardAmount);
+    IERC20(baseToken).transfer(msg.sender, rewardAmount);
   }
 
   ////////////////////////////////////////////////////
@@ -266,7 +283,7 @@ contract TWAM {
     sess.depositAmount -= amount;
 
     // Transfer the token to this contract
-    IERC20(sess.depositToken).transferFrom(address(this), msg.sender, amount);
+    IERC20(sess.depositToken).transfer(msg.sender, amount);
   }
 
   ////////////////////////////////////////////////////
@@ -306,10 +323,13 @@ contract TWAM {
     sess.maxMintingAmount -= numberToMint;
     deposits[msg.sender][sessionId] -= numberToMint * mintPrice;
     sess.depositAmount -= numberToMint * mintPrice;
-    IERC721(sess.token).safeTransferFrom(address(this), msg.sender, numberToMint);
+    for(uint256 i = 0; i < numberToMint; i++) {
+      IERC721(sess.token).safeTransferFrom(address(this), msg.sender, tokenIds[sess.token]);
+      tokenIds[sess.token] += 1;
+    }
 
     // Only give rewards to coordinator if the erc721 can be transferred to the user
-    rewards[sess.coordinator][sess.token] += numberToMint * mintPrice;
+    rewards[sess.coordinator][sess.depositToken] += numberToMint * mintPrice;
   }
 
   /// @notice Allows a user to forgo their mint allocation

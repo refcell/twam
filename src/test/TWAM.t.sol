@@ -31,6 +31,9 @@ contract TWAMTest is DSTestPlus, stdCheats {
     /// @dev The Mock ERC20 Deposit Token
     MockERC20 public depositToken;
 
+    /// @dev A Mock ERC721 Token that has no tokens minted
+    MockERC721 public badMockERC721;
+
     /// @notice testing suite precursors
     function setUp() public {
         /// @dev sets address(this) as the owner of the TWAM contract
@@ -39,6 +42,13 @@ contract TWAMTest is DSTestPlus, stdCheats {
 
         depositToken = new MockERC20("Token", "TKN", 18);
         mockToken = new MockERC721("Token", "TKN");
+
+        // Mint all erc721 tokens to the twam
+        for(uint256 i = 0; i < TOKEN_SUPPLY; i++) {
+            mockToken.mint(address(twam), i);
+        }
+
+        badMockERC721 = new MockERC721("Token", "TKN");
     }
 
     ////////////////////////////////////////////////////
@@ -53,10 +63,10 @@ contract TWAMTest is DSTestPlus, stdCheats {
         address new_sender = address(1337);
         startHoax(new_sender, new_sender, type(uint256).max);
 
-        // Expect Revert when session creation is not called from owner
-        vm.expectRevert(abi.encodeWithSignature("RequireOwner(address,address)", new_sender, address(this)));
+        // Expect Revert for permissionless session creations when erc721s aren't minted to this contract
+        vm.expectRevert(abi.encodeWithSignature("RequireMintedERC721Tokens(uint256,uint256)", 0, TOKEN_SUPPLY));
         twam.createSession(
-            address(mockToken),
+            address(badMockERC721),
             COORDINATOR,
             blockNumber + 10, // allocationStart,
             blockNumber + 15, // allocationEnd,
@@ -198,6 +208,163 @@ contract TWAMTest is DSTestPlus, stdCheats {
         // The rollover should succeed now that the minting period is over
         twam.rollover(0);
 
+        vm.stopPrank();
+    }
+
+    /// @notice Coordinators are able to withdraw their rewards
+    function testWithdrawRewards() public {
+        uint64 blockNumber = SafeCastLib.safeCastTo64(block.number);
+
+        // Create a valid session
+        twam.createSession(
+            address(mockToken),
+            COORDINATOR,
+            blockNumber + 10, // allocationStart,
+            blockNumber + 15, // allocationEnd,
+            blockNumber + 20, // mintingStart,
+            blockNumber + 25, // mintingEnd,
+            1, // minPrice,
+            address(depositToken),
+            TOKEN_SUPPLY, // maxMintingAmount,
+            1 // rolloverOption
+        );
+
+        // Jump to allocation period
+        vm.roll(blockNumber + 11);
+
+        // Create Mock Users
+        address firstUser = address(1);
+        address secondUser = address(2);
+
+        // Give them depositToken balances
+        depositToken.mint(firstUser, 1e18);
+        depositToken.mint(secondUser, 1e18);
+
+        // Mock first user deposits
+        startHoax(firstUser, firstUser, type(uint256).max);
+        depositToken.approve(address(twam), 1e18); // Approve the TWAM to transfer the depositToken
+        twam.deposit(0, TOKEN_SUPPLY);
+        assert(depositToken.balanceOf(address(twam)) == TOKEN_SUPPLY);
+        vm.stopPrank();
+
+        // Mock second user deposits
+        startHoax(secondUser, secondUser, type(uint256).max);
+        depositToken.approve(address(twam), 1e18); // Approve the TWAM to transfer the depositToken
+        twam.deposit(0, TOKEN_SUPPLY);
+        assert(depositToken.balanceOf(address(twam)) == 2 * TOKEN_SUPPLY);
+        vm.stopPrank();
+
+        // Jump to minting period
+        vm.roll(blockNumber + 21);
+
+        // Mock first user mints
+        startHoax(firstUser, firstUser, type(uint256).max);
+        twam.mint(0, TOKEN_SUPPLY);
+        assert(mockToken.balanceOf(address(twam)) == TOKEN_SUPPLY / 2);
+        assert(mockToken.balanceOf(address(firstUser)) == TOKEN_SUPPLY / 2);
+        assert(twam.rewards(COORDINATOR, address(depositToken)) == TOKEN_SUPPLY);
+        assert(depositToken.balanceOf(address(twam)) == 2 * TOKEN_SUPPLY);
+        vm.stopPrank();
+
+        // Mock second user mints
+        startHoax(secondUser, secondUser, type(uint256).max);
+        twam.mint(0, TOKEN_SUPPLY);
+        assert(mockToken.balanceOf(address(twam)) == 0);
+        assert(mockToken.balanceOf(address(secondUser)) == TOKEN_SUPPLY / 2);
+        assert(twam.rewards(COORDINATOR, address(depositToken)) == 2 * TOKEN_SUPPLY);
+        assert(depositToken.balanceOf(address(twam)) == 2 * TOKEN_SUPPLY);
+        vm.stopPrank();
+
+        // Jump to post-mint
+        vm.roll(blockNumber + 26);
+
+        // Try to withdraw rewards
+        startHoax(COORDINATOR, COORDINATOR, type(uint256).max);
+        assert(depositToken.balanceOf(COORDINATOR) == 0);
+        assert(depositToken.balanceOf(address(twam)) == 2 * TOKEN_SUPPLY);
+        assert(twam.rewards(COORDINATOR, address(depositToken)) == 2 * TOKEN_SUPPLY);
+        twam.withdrawRewards(address(depositToken));
+        assert(depositToken.balanceOf(COORDINATOR) == 2 * TOKEN_SUPPLY);
+        vm.stopPrank();
+    }
+
+    ////////////////////////////////////////////////////
+    ///           SESSION ALLOCATION PERIOD          ///
+    ////////////////////////////////////////////////////
+
+    /// @notice Test deposits
+    function testDeposit() public {
+        uint64 blockNumber = SafeCastLib.safeCastTo64(block.number);
+
+        // Expect Revert when session isn't created
+        vm.expectRevert(abi.encodeWithSignature("InvalidSession(uint256)", 0));
+        twam.deposit(0, TOKEN_SUPPLY);
+
+        // Create a valid session
+        twam.createSession(
+            address(mockToken),
+            COORDINATOR,
+            blockNumber + 10, // allocationStart,
+            blockNumber + 15, // allocationEnd,
+            blockNumber + 20, // mintingStart,
+            blockNumber + 25, // mintingEnd,
+            1, // minPrice,
+            address(depositToken),
+            TOKEN_SUPPLY, // maxMintingAmount,
+            1 // rolloverOption
+        );
+
+        // Jump to after the allocation period
+        vm.roll(blockNumber + 16);
+
+        // Expect Revert when we are after the allocation period
+        vm.expectRevert(
+            abi.encodeWithSignature(
+                "NonAllocation(uint256,uint64,uint64)",
+                blockNumber + 16,
+                blockNumber + 10,
+                blockNumber + 15
+            )
+        );
+        twam.deposit(0, TOKEN_SUPPLY);
+
+        // Reset to before the allocation period
+        vm.roll(blockNumber + 5);
+
+        // Expect Revert when we are before the allocation period
+        vm.expectRevert(
+            abi.encodeWithSignature(
+                "NonAllocation(uint256,uint64,uint64)",
+                blockNumber + 5,
+                blockNumber + 10,
+                blockNumber + 15
+            )
+        );
+        twam.deposit(0, TOKEN_SUPPLY);
+
+        // Jump to allocation period
+        vm.roll(blockNumber + 11);
+
+        // Create Mock Users
+        address firstUser = address(1);
+        address secondUser = address(2);
+
+        // Give them depositToken balances
+        depositToken.mint(firstUser, 1e18);
+        depositToken.mint(secondUser, 1e18);
+
+        // Mock first user deposits
+        startHoax(firstUser, firstUser, type(uint256).max);
+        depositToken.approve(address(twam), 1e18); // Approve the TWAM to transfer the depositToken
+        twam.deposit(0, TOKEN_SUPPLY);
+        assert(depositToken.balanceOf(address(twam)) == TOKEN_SUPPLY);
+        vm.stopPrank();
+
+        // Mock second user deposits
+        startHoax(secondUser, secondUser, type(uint256).max);
+        depositToken.approve(address(twam), 1e18); // Approve the TWAM to transfer the depositToken
+        twam.deposit(0, TOKEN_SUPPLY);
+        assert(depositToken.balanceOf(address(twam)) == 2 * TOKEN_SUPPLY);
         vm.stopPrank();
     }
 
