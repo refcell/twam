@@ -1,12 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.11;
 
+import {ERC721TokenReceiver} from "solmate/tokens/ERC721.sol";
+
 import {TwamBase} from "./TwamBase.sol";
 import {ClonesWithCallData} from "./lib/ClonesWithCallData.sol";
 
 ////////////////////////////////////////////////////
 ///                 CUSTOM ERRORS                ///
 ////////////////////////////////////////////////////
+
+/// Duplicate Session
+/// @param sender The message sender
+/// @param token The address of the ERC721 Token
+error DuplicateSession(address sender, address token);
+
+/// Not Approved
+/// The sender is not approved to create the session for the given ERC721 token
+/// @param sender The message sender
+/// @param approved The address of the approved creator
+/// @param token The address of the ERC721 Token
+error DuplicateSession(address sender, address approved, address token);
 
 /// Bad Session Bounds
 /// @param allocationStart The session's allocation period start
@@ -15,6 +29,11 @@ import {ClonesWithCallData} from "./lib/ClonesWithCallData.sol";
 /// @param mintingEnd The session's minting period end
 error BadSessionBounds(uint64 allocationStart, uint64 allocationEnd, uint64 mintingStart, uint64 mintingEnd);
 
+/// Require the ERC721 tokens to already be transferred to the twam contract
+/// Enables permissionless session creation
+/// @param balanceOfThis The ERC721 balance of the twam contract
+/// @param maxMintingAmount The maxmum number of ERC721s to mint
+error RequireMintedERC721Tokens(uint256 balanceOfThis, uint256 maxMintingAmount);
 
 ////////////////////////////////////////////////////
 ///                 Twam Factory                 ///
@@ -24,7 +43,7 @@ error BadSessionBounds(uint64 allocationStart, uint64 allocationEnd, uint64 mint
 /// @notice TWAM Deployment Factory
 /// @author Andreas Bigger <andreas@nascent.xyz>
 /// @dev Adapted from https://github.com/ZeframLou/vested-erc20/blob/main/src/VestedERC20Factory.sol
-contract TwamFactory {
+contract TwamFactory is ERC721TokenReceiver {
   /// @dev Use CloneWithCallData library for cheap deployment
   /// @dev Uses a modified minimal proxy pattern
   using ClonesWithCallData for address;
@@ -34,6 +53,14 @@ contract TwamFactory {
 
   /// @notice The TwamBase implementation
   TwamBase public immutable implementation;
+
+  /// @dev Only addresses that have transferred the erc721 tokens to this address can create a session
+  /// @dev Maps ERC721 => user
+  mapping(address => address) private approvedCreator;
+
+  /// @notice Tracks created TWAM sessions
+  /// @dev Maps ERC721 => deployed TwamBase Contract
+  mapping(address => address) public createdTwams;
 
   /// @notice Creates the Factory with the given TwamBase implementation
   /// @param implementation_ The TwamBase implementation
@@ -67,11 +94,18 @@ contract TwamFactory {
     uint8 rolloverOption
   ) external returns (TwamBase twamBase) {
     // Prevent Overwriting Sessions
-    if(sessionExists[token] || token == address(0)) {
+    if (createdTwams[token] == address(0) || token == address(0)) {
       revert DuplicateSession(msg.sender, token);
     }
-    // To allow permissionless session creation, the erc721 tokens must be minted or transferred to this contract
-    // This can be enabled efficiently by setting the ERC721.balanceOf(address(TWAM)) to the maxMintingAmount on erc721 contract deployment
+
+    // For Permissionless Session Creation
+    // We check that the sender is the approvedCreator
+    if (approvedCreator[token] != msg.sender) {
+      revert NotApproved(msg.sender, approvedCreator[token], token);
+    }
+
+    // We also have to make sure this address has a sufficient balance of ERC721 tokens for the session
+    // This can be done by setting the ERC721.balanceOf(address(TwamFactory)) to the maxMintingAmount on ERC721 contract deployment
     uint256 balanceOfThis = IERC721(token).balanceOf(address(this));
     if (balanceOfThis < maxMintingAmount) revert RequireMintedERC721Tokens(balanceOfThis, maxMintingAmount);
 
@@ -110,5 +144,34 @@ contract TwamFactory {
         address(implementation).cloneWithCallDataProvision(ptr)
     );
     emit TwamDeployed(twamBase);
+
+    createdTwams[token] = address(twamBase);
   }
+
+  /// @notice TwamFactory receives ERC721 tokens to allow permissionless session creation
+  function onERC721Received(
+        address _operator,
+        address _from,
+        uint256 _id,
+        bytes calldata _data
+    ) public virtual override returns (bytes4) {
+      // TODO: extract the token from the bytes _data
+      address token = address(_data);
+
+      // Make sure there isn't already an approved creator
+      if (approvedCreator[token] != address(0)) {
+        revert SessionOverwrite();
+      }
+
+      // Verify this token is being transferred by checking the balance of _from
+      if (IERC721(token).ownerOf(id) != _from) {
+        revert SenderNotOwner();
+      }
+
+      // Approve the sender as the session creator for 
+      approvedCreator[token] = _operator;
+
+      // Finally, return the selector to complete the transfer
+      return ERC721TokenReceiver.onERC721Received.selector;
+    }
 }

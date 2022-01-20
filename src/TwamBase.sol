@@ -14,11 +14,6 @@ import {IERC721} from "./interfaces/IERC721.sol";
 /// @param sessionId The session's id
 error InvalidSession(uint256 sessionId);
 
-/// Duplicate Session
-/// @param sender The message sender
-/// @param token The address of the ERC721 Token
-error DuplicateSession(address sender, address token);
-
 /// Not during the Allocation Period
 /// @param blockNumber block.number
 /// @param allocationStart The block number that marks when the allocation starts
@@ -46,19 +41,6 @@ error MintingNotOver(uint256 blockNumber, uint64 mintingEnd);
 /// @param sender The msg sender
 /// @param coordinator The expected session coordinator
 error InvalidCoordinator(address sender, address coordinator);
-
-/// Require the ERC721 tokens to already be transferred to the twam contract
-/// Enables permissionless session creation
-/// @param balanceOfThis The ERC721 balance of the twam contract
-/// @param maxMintingAmount The maxmum number of ERC721s to mint
-error RequireMintedERC721Tokens(uint256 balanceOfThis, uint256 maxMintingAmount);
-
-/// Bad Session Bounds
-/// @param allocationStart The session's allocation period start
-/// @param allocationEnd The session's allocation period end
-/// @param mintingStart The session's minting period start
-/// @param mintingEnd The session's minting period end
-error BadSessionBounds(uint64 allocationStart, uint64 allocationEnd, uint64 mintingStart, uint64 mintingEnd);
 
 ////////////////////////////////////////////////////
 ///                     TWAM                     ///
@@ -98,62 +80,6 @@ contract TwamBase {
   ////////////////////////////////////////////////////
   ///           SESSION MANAGEMENT LOGIC           ///
   ////////////////////////////////////////////////////
-
-  /// @notice Creates a new twam session
-  /// @dev This function is permissionless since we require
-  /// @dev maxMintingAmount of `token` to be minted to this contract
-  /// @param token The ERC721 Token
-  /// @param coordinator The session coordinator who controls the session
-  /// @param allocationStart When the allocation period begins
-  /// @param allocationEnd When the allocation period ends
-  /// @param mintingStart When the minting period begins
-  /// @param mintingEnd When the minting period ends
-  /// @param minPrice The minimum token price for minting
-  /// @param depositToken The token to pay for minting
-  /// @param maxMintingAmount The maximum amount of tokens to mint (must be minted to this contract)
-  /// @param rolloverOption What happens when the minting period ends and the session is over; one of {1, 2, 3}
-  function createSession(
-    address token,
-    address coordinator,
-    uint64 allocationStart,
-    uint64 allocationEnd,
-    uint64 mintingStart,
-    uint64 mintingEnd,
-    uint256 minPrice,
-    address depositToken,
-    uint256 maxMintingAmount,
-    uint256 rolloverOption
-  ) public {
-    // Prevent Overwriting Sessions
-    if(sessionExists[token] || token == address(0)) {
-      revert DuplicateSession(msg.sender, token);
-    }
-    // To allow permissionless session creation, the erc721 tokens must be minted or transferred to this contract
-    // This can be enabled efficiently by setting the ERC721.balanceOf(address(TWAM)) to the maxMintingAmount on erc721 contract deployment
-    uint256 balanceOfThis = IERC721(token).balanceOf(address(this));
-    if (balanceOfThis < maxMintingAmount) revert RequireMintedERC721Tokens(balanceOfThis, maxMintingAmount);
-
-    // Validate Session Bounds
-    if (
-      allocationStart > allocationEnd
-      || mintingStart > mintingEnd
-      || mintingStart < allocationEnd
-    ) {
-      revert BadSessionBounds(allocationStart, allocationEnd, mintingStart, mintingEnd);
-    }
-
-    uint256 currentSessionId = nextSessionId;
-    nextSessionId += 1;
-    sessionExists[token] = true;
-    sessions[currentSessionId] = Session(
-      token, coordinator, allocationStart, allocationEnd,
-      mintingStart, mintingEnd,
-      0, // resultPrice
-      minPrice, depositToken,
-      0, // depositAmount
-      maxMintingAmount, rolloverOption
-    );
-  }
 
   /// @notice Allows the coordinator to rollover 
   /// @notice Requires the minting period to be over
