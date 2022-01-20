@@ -349,11 +349,16 @@ contract TWAM {
       revert NonMinting(block.number, sess.mintingStart, sess.mintingEnd);
     }
 
+    // Calculate the mint price before the user forgos their mint
+    if(sess.resultPrice == 0) {
+      sess.resultPrice = sess.depositAmount / sess.maxMintingAmount;
+    }
+
     // Remove deposits
     // Will revert on underflow
     deposits[msg.sender][sessionId] -= amount;
     sess.depositAmount -= amount;
-    IERC20(sess.depositToken).transferFrom(address(this), msg.sender, amount);
+    IERC20(sess.depositToken).transfer(msg.sender, amount);
   }
 
   ////////////////////////////////////////////////////
