@@ -57,10 +57,10 @@ contract TwamBase is Clone {
   mapping(uint256 => uint256) public totalDeposits;
 
   /// @notice Maps a session id to the resulting session price
-  mappping(uint256 => uint256) public resultPrice;
+  mapping(uint256 => uint256) public resultPrice;
 
   /// @notice Maps a session id to the next token id to mint
-  mappping(uint256 => uint256) public nextMintId;
+  mapping(uint256 => uint256) public nextMintId;
 
   /// @notice Maps a user and session id to their deposits
   mapping(address => mapping(uint256 => uint256)) public deposits;
@@ -86,27 +86,31 @@ contract TwamBase is Clone {
   function rollover() public {
     // Read Calldata Immutables
     address coordinator = readCoordinator();
-    uint256 mintingEnd = readMintingEnd();
+    uint64 mintingEnd = readMintingEnd();
     uint256 sessionId = readSessionId();
+    uint8 rolloverOption = readRolloverOption();
 
     // Validate Coordinator
     if (msg.sender != coordinator) {
       revert InvalidCoordinator(msg.sender, coordinator);
     }
 
+    // MSTORE timestamp is cheaper than double calls
+    uint256 timestamp = block.timestamp;
+
     // Require Minting to be complete
-    if (block.timestamp < mintingEnd) {
-      revert MintingNotOver(block.number, mintingEnd);
+    if (timestamp < mintingEnd) {
+      revert MintingNotOver(timestamp, mintingEnd);
     }
 
     // Rollover Options
     // 1. Restart the twam
     // 2. Mint at resulting price or minimum if not reached
     // 3. Close Session
-    if(sess.rolloverOption != 3) {
+    if(rolloverOption != 3) {
       // For both options 1 & 2, we can just set the rolloverOffset
       // and check it inside our functions
-      rolloverOffset[sessionId] = block.timestamp;
+      rolloverOffset[sessionId] = timestamp;
     }
   }
 
@@ -131,8 +135,8 @@ contract TwamBase is Clone {
   function deposit(uint256 amount) public {
     // Read Calldata Immutables
     uint256 sessionId = readSessionId();
-    uint256 allocationStart = readAllocationStart();
-    uint256 allocationEnd = readAllocationEnd();
+    uint64 allocationStart = readAllocationStart();
+    uint64 allocationEnd = readAllocationEnd();
     address depositToken = readDepositToken();
 
     // MSTORE timestamp is cheaper than double calls
@@ -156,11 +160,12 @@ contract TwamBase is Clone {
   function withdraw(uint256 amount) public {
     // Read Calldata Immutables
     uint256 sessionId = readSessionId();
-    uint256 allocationStart = readAllocationStart();
-    uint256 allocationEnd = readAllocationEnd();
-    uint256 mintingStart = readMintingStart();
-    uint256 mintingEnd = readMintingEnd();
+    uint64 allocationStart = readAllocationStart();
+    uint64 allocationEnd = readAllocationEnd();
+    uint64 mintingStart = readMintingStart();
+    uint64 mintingEnd = readMintingEnd();
     address depositToken = readDepositToken();
+    uint8 rolloverOption = readRolloverOption();
 
     // MSTORE timestamp is cheaper than double calls
     uint256 timestamp = block.timestamp;
@@ -194,8 +199,8 @@ contract TwamBase is Clone {
     address token = readToken();
     address coordinator = readCoordinator();
     uint256 sessionId = readSessionId();
-    uint256 mintingStart = readMintingStart();
-    uint256 mintingEnd = readMintingEnd();
+    uint64 mintingStart = readMintingStart();
+    uint64 mintingEnd = readMintingEnd();
     address depositToken = readDepositToken();
     uint256 maxMintingAmount = readMaxMintingAmount();
     uint256 minPrice = readMinPrice();
@@ -251,8 +256,8 @@ contract TwamBase is Clone {
   function forgo(uint256 amount) public {
     // Read Calldata Immutables
     uint256 sessionId = readSessionId();
-    uint256 mintingStart = readMintingStart();
-    uint256 mintingEnd = readMintingEnd();
+    uint64 mintingStart = readMintingStart();
+    uint64 mintingEnd = readMintingEnd();
     address depositToken = readDepositToken();
     uint256 maxMintingAmount = readMaxMintingAmount();
 

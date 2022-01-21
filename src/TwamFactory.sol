@@ -5,6 +5,7 @@ import {ERC721TokenReceiver} from "@solmate/tokens/ERC721.sol";
 import {ClonesWithImmutableArgs} from "@clones/ClonesWithImmutableArgs.sol";
 
 import {TwamBase} from "./TwamBase.sol";
+import {IERC721} from "./interfaces/IERC721.sol";
 
 ////////////////////////////////////////////////////
 ///                 CUSTOM ERRORS                ///
@@ -34,6 +35,12 @@ error BadSessionBounds(uint64 allocationStart, uint64 allocationEnd, uint64 mint
 /// @param balanceOfThis The ERC721 balance of the twam contract
 /// @param maxMintingAmount The maxmum number of ERC721s to mint
 error RequireMintedERC721Tokens(uint256 balanceOfThis, uint256 maxMintingAmount);
+
+/// Session Overwrite
+error SessionOverwrite();
+
+/// Sender is not owner
+error SenderNotOwner();
 
 ////////////////////////////////////////////////////
 ///                 Twam Factory                 ///
@@ -156,8 +163,10 @@ contract TwamFactory is ERC721TokenReceiver {
         uint256 _id,
         bytes calldata _data
     ) public virtual override returns (bytes4) {
-      // TODO: extract the token from the bytes _data
-      address token = address(_data);
+      address token;
+      assembly {
+        token := mload(add(calldataload(_data.offset),20))
+      }
 
       // Make sure there isn't already an approved creator
       if (approvedCreator[token] != address(0)) {
@@ -165,7 +174,7 @@ contract TwamFactory is ERC721TokenReceiver {
       }
 
       // Verify this token is being transferred by checking the balance of _from
-      if (IERC721(token).ownerOf(id) != _from) {
+      if (IERC721(token).ownerOf(_id) != _from) {
         revert SenderNotOwner();
       }
 
