@@ -41,7 +41,7 @@ contract TwamFactoryTest is DSTestPlus {
             // mockToken.mint(address(twamFactory), i);
         // }
         // Save the first token to transfer to set the permissioned session creator
-        mockToken.mint(COORDINATOR, 0);
+  
         // mockToken.mint(COORDINATOR, 0);
         // mockToken.transfer(address(twamFactory), 0);
     }
@@ -50,15 +50,16 @@ contract TwamFactoryTest is DSTestPlus {
     function testOnERC721Received() public {
       startHoax(COORDINATOR, COORDINATOR, type(uint256).max);
       
+      mockToken.mint(COORDINATOR, 0);
 
       // This should work
-      // mockToken.approve(COORDINATOR, 0);
+      mockToken.approve(COORDINATOR, 0);
       // vm.expectRevert(abi.encodeWithSignature("SessionOverwrite()"));
       mockToken.safeTransferFrom(
         COORDINATOR,                          // from
         address(twamFactory),                 // to
         0,                                    // id
-        abi.encodePacked(address(mockToken))  // data
+        abi.encode(address(mockToken))  // data
       );
 
       // Verify we correctly set the approved creator
