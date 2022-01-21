@@ -69,14 +69,42 @@ contract TwamBase is Clone {
   /// @notice Token Ids for the ERC721s
   mapping(address => uint256) private tokenIds;
 
+  /// @dev A rollover offset
+  /// @dev Maps a session Id to the rolloverOffset
+  /// @dev The rolloverOffset equals block.timestamp when rollover() is called
+  mapping(uint256 => uint256) private rolloverOffset;
+
   ////////////////////////////////////////////////////
   ///           SESSION MANAGEMENT LOGIC           ///
   ////////////////////////////////////////////////////
 
   /// @notice Allows the coordinator to rollover 
   /// @notice Requires the minting period to be over
-  function rollover(uint256 sessionId) public {
-    // TODO:
+  function rollover() public {
+    // Read Calldata Immutables
+    address coordinator = readCoordinator();
+    uint256 mintingEnd = readMintingEnd();
+    uint256 sessionId = readSessionId();
+
+    // Validate Coordinator
+    if (msg.sender != coordinator) {
+      revert InvalidCoordinator(msg.sender, coordinator);
+    }
+
+    // Require Minting to be complete
+    if (block.timestamp < mintingEnd) {
+      revert MintingNotOver(block.number, mintingEnd);
+    }
+
+    // Rollover Options
+    // 1. Restart the twam
+    // 2. Mint at resulting price or minimum if not reached
+    // 3. Close Session
+    if(sess.rolloverOption != 3) {
+      // For both options 1 & 2, we can just set the rolloverOffset
+      // and check it inside our functions
+      rolloverOffset[sessionId] = block.timestamp;
+    }
   }
 
   /// @notice Allows the coordinator to withdraw session rewards
