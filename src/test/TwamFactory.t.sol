@@ -2,8 +2,7 @@
 pragma solidity 0.8.11;
 
 
-import {stdCheats, stdError} from "@std/stdlib.sol";
-import {Vm} from "@std/Vm.sol";
+import {stdError} from "@std/stdlib.sol";
 
 import {MockERC20} from "@solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC721} from "@solmate/test/utils/mocks/MockERC721.sol";
@@ -13,10 +12,8 @@ import {DSTestPlus} from "./utils/DSTestPlus.sol";
 import {TwamBase} from "../TwamBase.sol";
 import {TwamFactory} from "../TwamFactory.sol";
 
-contract TwamFactoryTest is DSTestPlus, stdCheats {
-
-    /// @dev Use forge-std Vm logic
-    Vm public constant vm = Vm(HEVM_ADDRESS);
+/// @dev DSTestPlus inherits stdCheats
+contract TwamFactoryTest is DSTestPlus {
 
     /// @dev Contracts
     TwamBase public twamBase;         // Twam Base (Clone)
@@ -40,24 +37,66 @@ contract TwamFactoryTest is DSTestPlus, stdCheats {
         badMockERC721 = new MockERC721("Token", "TKN");
 
         // Mint all erc721 tokens to the twam
-        for(uint256 i = 1; i < TOKEN_SUPPLY; i++) {
-            mockToken.mint(address(twamFactory), i);
-        }
+        // for(uint256 i = 1; i < TOKEN_SUPPLY; i++) {
+            // mockToken.mint(address(twamFactory), i);
+        // }
         // Save the first token to transfer to set the permissioned session creator
+        mockToken.mint(COORDINATOR, 0);
         // mockToken.mint(COORDINATOR, 0);
         // mockToken.transfer(address(twamFactory), 0);
     }
 
+    /// @notice Test onERC721Received
+    function testOnERC721Received() public {
+      startHoax(COORDINATOR, COORDINATOR, type(uint256).max);
+      
+
+      // This should work
+      // mockToken.approve(COORDINATOR, 0);
+      // vm.expectRevert(abi.encodeWithSignature("SessionOverwrite()"));
+      mockToken.safeTransferFrom(
+        COORDINATOR,                          // from
+        address(twamFactory),                 // to
+        0,                                    // id
+        abi.encodePacked(address(mockToken))  // data
+      );
+
+      // Verify we correctly set the approved creator
+
+      // assert(twamFactory.approvedCreator(address(mockToken)) != address(0));
+      // assert(twamFactory.approvedCreator(address(mockToken)) == COORDINATOR);
+      
+      // This should fail since the session has already been created
+      // vm.expectRevert(abi.encodeWithSignature("SessionOverwrite()"));
+      // mockToken.transferFrom(COORDINATOR, address(twamFactory), 0);
+
+      vm.stopPrank();
+    }
+
     /// @notice Creates a Twam from Factory
-    function testCreateTwam() public {
+    function xtestCreateTwam() public {
       uint64 t = SafeCastLib.safeCastTo64(block.timestamp);
 
       // We should expect a NotApproved revert
+      // vm.expectRevert(abi.encodeWithSignature(
+      //   "NotApproved(address,address,address)",
+      //   address(this),
+      //   address(0),
+      //   address(mockToken)
+      // ));
+
+
+
+      // vm.expectRevert(abi.encodeWithSignature(
+      //   "DuplicateSession(address,address)",
+      //   address(this),
+      //   address(mockToken)
+      // ));
+
       vm.expectRevert(abi.encodeWithSignature(
-        "NotApproved(address,address,address)",
-        address(this),
-        address(0),
-        address(mockToken)
+        "RequireMintedERC721Tokens(uint256,uint256)",
+        TOKEN_SUPPLY - 1,
+        TOKEN_SUPPLY
       ));
       twamBase = twamFactory.createTwam(
         address(mockToken),

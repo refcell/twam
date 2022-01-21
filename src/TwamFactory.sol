@@ -63,7 +63,7 @@ contract TwamFactory is ERC721TokenReceiver {
 
   /// @dev Only addresses that have transferred the erc721 tokens to this address can create a session
   /// @dev Maps ERC721 => user
-  mapping(address => address) private approvedCreator;
+  mapping(address => address) public approvedCreator;
 
   /// @notice Tracks created TWAM sessions
   /// @dev Maps ERC721 => deployed TwamBase Contract
@@ -105,7 +105,7 @@ contract TwamFactory is ERC721TokenReceiver {
     uint8 rolloverOption
   ) external returns (TwamBase twamBase) {
     // Prevent Overwriting Sessions
-    if (createdTwams[token] == address(0) || token == address(0)) {
+    if (createdTwams[token] != address(0) || token == address(0)) {
       revert DuplicateSession(msg.sender, token);
     }
 
@@ -163,10 +163,11 @@ contract TwamFactory is ERC721TokenReceiver {
         uint256 _id,
         bytes calldata _data
     ) public virtual override returns (bytes4) {
-      address token;
+      bytes memory data;
       assembly {
-        token := mload(add(calldataload(_data.offset),20))
+        data := mload(calldataload(_data.offset))
       }
+      address token = abi.decode(data, (address));
 
       // Make sure there isn't already an approved creator
       if (approvedCreator[token] != address(0)) {
@@ -179,7 +180,7 @@ contract TwamFactory is ERC721TokenReceiver {
       }
 
       // Approve the sender as the session creator for 
-      approvedCreator[token] = _operator;
+      approvedCreator[token] = _from;
 
       // Finally, return the selector to complete the transfer
       return ERC721TokenReceiver.onERC721Received.selector;
