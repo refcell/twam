@@ -249,7 +249,32 @@ contract TwamBase is Clone {
   /// @notice Allows a user to forgo their mint allocation
   /// @param amount The amount of deposits to withdraw
   function forgo(uint256 amount) public {
-    // TODO: reimplement
+    // Read Calldata Immutables
+    uint256 sessionId = readSessionId();
+    uint256 mintingStart = readMintingStart();
+    uint256 mintingEnd = readMintingEnd();
+    address depositToken = readDepositToken();
+    uint256 maxMintingAmount = readMaxMintingAmount();
+
+    // MSTORE timestamp is cheaper than double calls
+    uint256 timestamp = block.timestamp;
+
+    // Make sure the session is in the minting period
+    if (timestamp > mintingEnd || timestamp < mintingStart) {
+      revert NonMinting(timestamp, mintingStart, mintingEnd);
+    }
+
+    // Cache the result price
+    if(resultPrice[sessionId] == 0) {
+      // incur an additional SLOAD since this branch occurs once
+      resultPrice[sessionId] = totalDeposits[sessionId] / maxMintingAmount;
+    }
+
+    // Remove deposits
+    // Will revert on underflow
+    deposits[msg.sender][sessionId] -= amount;
+    totalDeposits[sessionId] -= amount;
+    IERC20(depositToken).transfer(msg.sender, amount);
   }
 
   ////////////////////////////////////////////////////
