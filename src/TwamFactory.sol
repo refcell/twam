@@ -62,6 +62,12 @@ contract TwamFactory is ERC721TokenReceiver {
   /// @dev Maps ERC721 => deployed TwamBase Contract
   mapping(address => address) public createdTwams;
 
+  /// @notice Tracks TWAM Sessions by ID
+  mapping(uint256 => address) public sessions;
+
+  /// @notice The next session ID
+  uint256 public sessionId = 1;
+
   /// @notice Creates the Factory with the given TwamBase implementation
   /// @param implementation_ The TwamBase implementation
   constructor(TwamBase implementation_) {
@@ -116,37 +122,31 @@ contract TwamFactory is ERC721TokenReceiver {
       revert BadSessionBounds(allocationStart, allocationEnd, mintingStart, mintingEnd);
     }
 
-    bytes memory ptr = new bytes(101);
-    assembly {
-        // Pack 20 byte addresses
-        mstore(add(ptr, 0x20), shl(0x60, token))
-        mstore(add(ptr, 0x34), shl(0x60, coordinator))
-
-        // Pack 8 byte uint64 values
-        mstore(add(ptr, 0x48), shl(0xc0, allocationStart))
-        mstore(add(ptr, 0x50), shl(0xc0, allocationEnd))
-        mstore(add(ptr, 0x58), shl(0xc0, mintingStart))
-        mstore(add(ptr, 0x60), shl(0xc0, mintingEnd))
-
-        // Pack 32 byte uint256 values
-        mstore(add(ptr, 0x68), 0) // resultPrice - reserved slot
-        mstore(add(ptr, 0x88), minPrice)
-        mstore(add(ptr, 0xa8), 0) // depositAmount - reserved slot
-        mstore(add(ptr, 0xc8), maxMintingAmount)
-
-        // Pack a 20 byte address and an 1 byte rollover option
-        mstore(add(ptr, 0xe8), shl(0x60, depositToken))
-        mstore(add(ptr, 0xfb), rolloverOption)
-    }
+    // We can abi encodePacked instead of manually packing
+    bytes memory data = abi.encodePacked(
+      token,
+      coordinator,
+      allocationStart,
+      allocationEnd,
+      mintingStart,
+      mintingEnd,
+      minPrice,
+      maxMintingAmount,
+      depositToken,
+      rolloverOption,
+      sessionId
+    );
 
     // Create the TWAM
     twamBase = TwamBase(
-        address(implementation).clone(ptr)
+        address(implementation).clone(data)
     );
     emit TwamDeployed(twamBase);
 
     // Record Creation
     createdTwams[token] = address(twamBase);
+    sessions[sessionId] = address(twamBase);
+    sessionId += 1;
   }
 
   /// @notice TwamFactory receives ERC721 tokens to allow permissionless session creation

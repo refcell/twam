@@ -48,15 +48,26 @@ error InvalidCoordinator(address sender, address coordinator);
 ////////////////////////////////////////////////////
 
 /// @title TwamBase
-/// @notice Time Weighted Asset Mints
+/// @notice Time Weighted Asset Minting Base Clone
 /// @author Andreas Bigger <andreas@nascent.xyz>
 contract TwamBase is Clone {
+  /// @dev Immutable Session Variables are stored in Calldata using ClonesWithImmutableArgs
 
-  /// @notice Maps a user to their deposits
-  mapping(address => uint256) public deposits;
+  /// @notice Maps a session to the amount of deposits
+  mapping(uint256 => uint256) public totalDeposits;
+
+  /// @notice Maps a session id to the resulting session price
+  mappping(uint256 => uint256) public resultPrice;
+
+  /// @notice Maps a user and session id to their deposits
+  mapping(address => mapping(uint256 => uint256)) public deposits;
 
   /// @notice Session Rewards for Coordinators
-  uint256 public rewards;
+  /// @dev Maps coordinator => token => rewardAmount
+  mapping(address => mapping(address => uint256)) public rewards;
+
+  /// @notice Token Ids for the ERC721s
+  mapping(address => uint256) private tokenIds;
 
   ////////////////////////////////////////////////////
   ///           SESSION MANAGEMENT LOGIC           ///
@@ -65,55 +76,13 @@ contract TwamBase is Clone {
   /// @notice Allows the coordinator to rollover 
   /// @notice Requires the minting period to be over
   function rollover(uint256 sessionId) public {
-    // Make sure the session is valid
-    if (sessionId >= nextSessionId || sessions[sessionId].token == address(0)) {
-      revert InvalidSession(sessionId);
-    }
-
-    // Get the session
-    Session storage sess = sessions[sessionId];
-
-    if (msg.sender != sess.coordinator) {
-      revert InvalidCoordinator(msg.sender, sess.coordinator);
-    }
-
-    // Require Minting to be complete
-    if (block.number < sess.mintingEnd) {
-      revert MintingNotOver(block.number, sess.mintingEnd);
-    }
-
-    // Rollover Options
-    // 1. Restart the twam
-    // 2. Mint at resulting price or minimum if not reached
-    // 3. Close Session
-    if(sess.rolloverOption == 2) {
-      // We can just make the mintingEnd the maximum number
-      sess.mintingEnd = type(uint64).max;
-    }
-    if(sess.rolloverOption == 1) {
-      uint64 allocationPeriod = sess.allocationEnd - sess.allocationStart;
-      uint64 cooldownPeriod = sess.mintingStart - sess.allocationEnd;
-      uint64 mintingPeriod = sess.mintingEnd - sess.mintingStart;
-
-      // Reset allocation period
-      sess.allocationStart = SafeCastLib.safeCastTo64(block.number);
-      sess.allocationEnd = allocationPeriod + SafeCastLib.safeCastTo64(block.number);
-
-      // Reset Minting period
-      sess.mintingStart = SafeCastLib.safeCastTo64(block.number) + allocationPeriod + cooldownPeriod;
-      sess.mintingEnd = sess.mintingStart + mintingPeriod;
-    }
-
-    // Otherwise, do nothing.
-    // If the session is closed, we just allow the users to withdraw
+    // TODO:
   }
 
   /// @notice Allows the coordinator to withdraw session rewards
   /// @param baseToken The token to transfer to the coordinator
   function withdrawRewards(address baseToken) public {
-    uint256 rewardAmount = rewards[msg.sender][baseToken];
-    rewards[msg.sender][baseToken] = 0; 
-    IERC20(baseToken).transfer(msg.sender, rewardAmount);
+    // TODO:
   }
 
   ////////////////////////////////////////////////////
@@ -125,55 +94,14 @@ contract TwamBase is Clone {
   /// @param sessionId The session id
   /// @param amount The amount of the deposit token to deposit
   function deposit(uint256 sessionId, uint256 amount) public {
-    // Make sure the session is valid
-    if (sessionId >= nextSessionId || sessions[sessionId].token == address(0)) {
-      revert InvalidSession(sessionId);
-    }
-
-    // Get the session
-    Session storage sess = sessions[sessionId];
-
-    // Make sure the session is in the allocation period
-    if (block.number > sess.allocationEnd || block.number < sess.allocationStart) {
-      revert NonAllocation(block.number, sess.allocationStart, sess.allocationEnd);
-    }
-
-    // Transfer the token to this contract
-    IERC20(sess.depositToken).transferFrom(msg.sender, address(this), amount);
-
-    // Update the user's deposit amount and total session deposits
-    deposits[msg.sender][sessionId] += amount;
-    sess.depositAmount += amount;
+    // TODO: reimplement
   }
 
   /// @notice Withdraws a deposit token from a session
   /// @param sessionId The session id
   /// @param amount The amount of the deposit token to withdraw
   function withdraw(uint256 sessionId, uint256 amount) public {
-    // Make sure the session is valid
-    if (sessionId >= nextSessionId || sessions[sessionId].token == address(0)) {
-      revert InvalidSession(sessionId);
-    }
-
-    // Get the session
-    Session storage sess = sessions[sessionId];
-
-    // Make sure the session is in the allocation period
-    if (
-      (block.number > sess.allocationEnd || block.number < sess.allocationStart)
-      &&
-      (block.number < sess.mintingEnd || sess.rolloverOption != 3) // Allows a user to withdraw deposits if session ends
-      ) {
-      revert NonAllocation(block.number, sess.allocationStart, sess.allocationEnd);
-    }
-
-    // Update the user's deposit amount and total session deposits
-    // This will revert on underflow so no need to check amount
-    deposits[msg.sender][sessionId] -= amount;
-    sess.depositAmount -= amount;
-
-    // Transfer the token to this contract
-    IERC20(sess.depositToken).transfer(msg.sender, amount);
+    // TODO: reimplement
   }
 
   ////////////////////////////////////////////////////
@@ -184,81 +112,72 @@ contract TwamBase is Clone {
   /// @param sessionId The session Id
   /// @param amount The amount of deposits to mint with
   function mint(uint256 sessionId, uint256 amount) public {
-    // Make sure the session is valid
-    if (sessionId >= nextSessionId || sessions[sessionId].token == address(0)) {
-      revert InvalidSession(sessionId);
-    }
-
-    // Get the session
-    Session storage sess = sessions[sessionId];
-
-    // Make sure the session is in the minting period
-    if (block.number > sess.mintingEnd || block.number < sess.mintingStart) {
-      revert NonMinting(block.number, sess.mintingStart, sess.mintingEnd);
-    }
-
-    // Calculate the mint price
-    if(sess.resultPrice == 0) {
-      sess.resultPrice = sess.depositAmount / sess.maxMintingAmount;
-    }
-    uint256 mintPrice = sess.resultPrice > sess.minPrice ? sess.resultPrice : sess.minPrice;
-
-    // Make sure the user has enough deposits and can mint
-    if (deposits[msg.sender][sessionId] < amount || amount < mintPrice) {
-      revert InsufficientDesposits(msg.sender, deposits[msg.sender][sessionId], amount);
-    }
-
-    // Calculate mint amount and transfer
-    uint256 numberToMint = amount / mintPrice;
-    sess.maxMintingAmount -= numberToMint;
-    deposits[msg.sender][sessionId] -= numberToMint * mintPrice;
-    sess.depositAmount -= numberToMint * mintPrice;
-    for(uint256 i = 0; i < numberToMint; i++) {
-      IERC721(sess.token).safeTransferFrom(address(this), msg.sender, tokenIds[sess.token]);
-      tokenIds[sess.token] += 1;
-    }
-
-    // Only give rewards to coordinator if the erc721 can be transferred to the user
-    rewards[sess.coordinator][sess.depositToken] += numberToMint * mintPrice;
+    // TODO: reimplement
   }
 
   /// @notice Allows a user to forgo their mint allocation
   /// @param sessionId The session Id
   /// @param amount The amount of deposits to withdraw
   function forgo(uint256 sessionId, uint256 amount) public {
-    // Make sure the session is valid
-    if (sessionId >= nextSessionId || sessions[sessionId].token == address(0)) {
-      revert InvalidSession(sessionId);
-    }
-
-    // Get the session
-    Session storage sess = sessions[sessionId];
-
-    // Make sure the session is in the minting period
-    if (block.number > sess.mintingEnd || block.number < sess.mintingStart) {
-      revert NonMinting(block.number, sess.mintingStart, sess.mintingEnd);
-    }
-
-    // Calculate the mint price before the user forgos their mint
-    if(sess.resultPrice == 0) {
-      sess.resultPrice = sess.depositAmount / sess.maxMintingAmount;
-    }
-
-    // Remove deposits
-    // Will revert on underflow
-    deposits[msg.sender][sessionId] -= amount;
-    sess.depositAmount -= amount;
-    IERC20(sess.depositToken).transfer(msg.sender, amount);
+    // TODO: reimplement
   }
 
   ////////////////////////////////////////////////////
-  ///            SESSION MINTING PERIOD            ///
+  ///            READ SESSION PARAMETERS           ///
   ////////////////////////////////////////////////////
 
-  /// @notice Helper function to get a session
-  /// @param sessionId The uint256 session identifier
-  /// @return A Session Object
-  function getSession(uint256 sessionId) external returns(Session memory) {
-    return sessions[sessionId];
+  /// @notice Reads the session ERC721 Token
+  function readToken() public pure returns(address) {
+    return _getArgAddress(0);
+  }
+
+  /// @notice Reads the Session Coordinator
+  function readCoordinator() public pure returns(address) {
+    return _getArgAddress(20);
+  }
+
+  /// @notice Reads the Session Allocation Period Start Timestamp
+  function readAllocationStart() public pure returns(uint64) {
+    return _getArgUint64(40);
+  }
+
+  /// @notice Reads the Session Allocation Period End Timestamp
+  function readAllocationEnd() public pure returns(uint64) {
+    return _getArgUint64(48);
+  }
+
+  /// @notice Reads the Session Minting Period Start Timestamp
+  function readMintingStart() public pure returns(uint64) {
+    return _getArgUint64(56);
+  }
+
+  /// @notice Reads the Session Minting Period End Timestamp
+  function readMintingEnd() public pure returns(uint64) {
+    return _getArgUint64(64);
+  }
+
+  /// @notice Reads the Session Minimum ERC721 Token Sale Price
+  function readMinPrice() public pure returns(uint256) {
+    return _getArgUint256(72);
+  }
+
+  /// @notice Reads the Session Maximum Number of Available Tokens to Mint
+  function readMaxMintingAmount() public pure returns(uint256) {
+    return _getArgUint256(104);
+  }
+
+  /// @notice Reads the Session Deposit ERC20 Token
+  function readDepositToken() public pure returns(address) {
+    return _getArgAddress(136);
+  }
+
+  /// @notice Reads the Session Rollover Option
+  function readRolloverOption() public pure returns(uint8) {
+    return _getArgUint8(156);
+  }
+
+  /// @notice Reads the Session ID
+  function readSessionId() public pure returns(uint256) {
+    return _getArgUint256(157);
   }
 }
