@@ -149,10 +149,35 @@ contract TwamBase is Clone {
   }
 
   /// @notice Withdraws a deposit token from a session
-  /// @param sessionId The session id
   /// @param amount The amount of the deposit token to withdraw
-  function withdraw(uint256 sessionId, uint256 amount) public {
-    // TODO: reimplement
+  function withdraw(uint256 amount) public {
+    // Read Calldata Immutables
+    uint256 sessionId = readSessionId();
+    uint256 allocationStart = readAllocationStart();
+    uint256 allocationEnd = readAllocationEnd();
+    uint256 mintingStart = readMintingStart();
+    uint256 mintingEnd = readMintingEnd();
+    address depositToken = readDepositToken();
+
+    // MSTORE timestamp is cheaper than double calls
+    uint256 timestamp = block.timestamp;
+
+    // Make sure the session is in the allocation period
+    if (
+      (timestamp > allocationEnd || timestamp < allocationStart)
+      &&
+      (timestamp < mintingEnd || rolloverOption != 3) // Allows a user to withdraw deposits if session ends
+      ) {
+      revert NonAllocation(timestamp, allocationStart, allocationEnd);
+    }
+
+    // Update the user's deposit amount and total session deposits
+    // This will revert on underflow so no need to check amount
+    deposits[msg.sender][sessionId] -= amount;
+    totalDeposits[sessionId] -= amount;
+
+    // Transfer the token to this contract
+    IERC20(depositToken).transfer(msg.sender, amount);
   }
 
   ////////////////////////////////////////////////////
