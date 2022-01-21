@@ -59,6 +59,9 @@ contract TwamBase is Clone {
   /// @notice Maps a session id to the resulting session price
   mappping(uint256 => uint256) public resultPrice;
 
+  /// @notice Maps a session id to the next token id to mint
+  mappping(uint256 => uint256) public nextMintId;
+
   /// @notice Maps a user and session id to their deposits
   mapping(address => mapping(uint256 => uint256)) public deposits;
 
@@ -185,16 +188,67 @@ contract TwamBase is Clone {
   ////////////////////////////////////////////////////
 
   /// @notice Mints tokens during minting period
-  /// @param sessionId The session Id
   /// @param amount The amount of deposits to mint with
-  function mint(uint256 sessionId, uint256 amount) public {
-    // TODO: reimplement
+  function mint(uint256 amount) public {
+    // Read Calldata Immutables
+    address token = readToken();
+    address coordinator = readCoordinator();
+    uint256 sessionId = readSessionId();
+    uint256 mintingStart = readMintingStart();
+    uint256 mintingEnd = readMintingEnd();
+    address depositToken = readDepositToken();
+    uint256 maxMintingAmount = readMaxMintingAmount();
+    uint256 minPrice = readMinPrice();
+
+    // MSTORE timestamp is cheaper than double calls
+    uint256 timestamp = block.timestamp;
+
+    // Make sure the session is in the minting period
+    if (timestamp > mintingEnd || timestamp < mintingStart) {
+      revert NonMinting(timestamp, mintingStart, mintingEnd);
+    }
+
+    // Cache the result price
+    if(resultPrice[sessionId] == 0) {
+      // incur an additional SLOAD since this branch occurs once
+      resultPrice[sessionId] = totalDeposits[sessionId] / maxMintingAmount;
+    }
+
+    // Calculate the mint price
+    uint256 mintPrice = resultPrice[sessionId];
+    if(mintPrice < minPrice) mintPrice = minPrice;
+
+    // Validate sender deposits and amount
+    if (deposits[msg.sender][sessionId] < amount || amount < mintPrice) {
+      // incur the additional SLOAD at the cost of a failed tx
+      revert InsufficientDesposits(msg.sender, deposits[msg.sender][sessionId], amount);
+    }
+
+    // Get the next token Id to mint
+    uint256 nextTokenToMint = nextMintId[sessionId];
+    
+    // Reverts on underflow
+    uint256 numberToMint = amount / mintPrice;
+
+    // Reduce deposits
+    deposits[msg.sender][sessionId] -= numberToMint * mintPrice;
+    totalDeposits[sessionId] -= numberToMint * mintPrice;
+
+    // Update the next id to mint
+    nextMintId[sessionId] += numberToMint;
+
+    // Mint
+    for(uint256 i = nextTokenToMint; i < nextTokenToMint + numberToMint; i++) {
+      IERC721(token).safeTransferFrom(address(this), msg.sender, i);
+    }
+
+    // Only give rewards to coordinator once the ERC721 Tokens are transferred
+    rewards[coordinator][depositToken] += numberToMint * mintPrice;
   }
 
   /// @notice Allows a user to forgo their mint allocation
-  /// @param sessionId The session Id
   /// @param amount The amount of deposits to withdraw
-  function forgo(uint256 sessionId, uint256 amount) public {
+  function forgo(uint256 amount) public {
     // TODO: reimplement
   }
 
