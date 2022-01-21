@@ -108,9 +108,14 @@ contract TwamBase is Clone {
   }
 
   /// @notice Allows the coordinator to withdraw session rewards
-  /// @param baseToken The token to transfer to the coordinator
-  function withdrawRewards(address baseToken) public {
-    // TODO:
+  function withdrawRewards() public {
+    // Read Calldata Immutables
+    address depositToken = readDepositToken();
+
+    // Transfer rewards
+    uint256 rewardAmount = rewards[msg.sender][depositToken];
+    rewards[msg.sender][depositToken] = 0;
+    IERC20(depositToken).transfer(msg.sender, rewardAmount);
   }
 
   ////////////////////////////////////////////////////
