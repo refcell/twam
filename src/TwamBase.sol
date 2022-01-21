@@ -124,10 +124,28 @@ contract TwamBase is Clone {
 
   /// @notice Deposit a deposit token into a session
   /// @dev requires approval of the deposit token
-  /// @param sessionId The session id
   /// @param amount The amount of the deposit token to deposit
-  function deposit(uint256 sessionId, uint256 amount) public {
-    // TODO: reimplement
+  function deposit(uint256 amount) public {
+    // Read Calldata Immutables
+    uint256 sessionId = readSessionId();
+    uint256 allocationStart = readAllocationStart();
+    uint256 allocationEnd = readAllocationEnd();
+    address depositToken = readDepositToken();
+
+    // MSTORE timestamp is cheaper than double calls
+    uint256 timestamp = block.timestamp;
+  
+    // Make sure the session is in the allocation period
+    if (timestamp > allocationEnd || timestamp < allocationStart) {
+      revert NonAllocation(timestamp, allocationStart, allocationEnd);
+    }
+
+    // Transfer the token to this contract
+    IERC20(depositToken).transferFrom(msg.sender, address(this), amount);
+
+    // Update the user's deposit amount and total session deposits
+    deposits[msg.sender][sessionId] += amount;
+    totalDeposits[sessionId] += amount;
   }
 
   /// @notice Withdraws a deposit token from a session
