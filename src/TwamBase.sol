@@ -52,31 +52,11 @@ error InvalidCoordinator(address sender, address coordinator);
 /// @author Andreas Bigger <andreas@nascent.xyz>
 contract TwamBase is Clone {
 
-  /// @dev The next session id
-  uint256 private nextSessionId;
-
-  /// @dev Maps session ids to sessions
-  mapping(uint256 => Session) public sessions;
-
-  /// @dev Maps ERC721 to if their session exists
-  mapping(address => bool) public sessionExists;
-
-  /// @dev This contract owner
-  address immutable public owner;
-
-  /// @notice Maps a user and session id to their deposits
-  mapping(address => mapping(uint256 => uint256)) public deposits;
+  /// @notice Maps a user to their deposits
+  mapping(address => uint256) public deposits;
 
   /// @notice Session Rewards for Coordinators
-  /// @dev Maps coordinator => token => rewardAmount
-  mapping(address => mapping(address => uint256)) public rewards;
-
-  /// @notice Token Ids for the ERC721s
-  mapping(address => uint256) private tokenIds;
-
-  constructor() {
-    owner = msg.sender;
-  }
+  uint256 public rewards;
 
   ////////////////////////////////////////////////////
   ///           SESSION MANAGEMENT LOGIC           ///

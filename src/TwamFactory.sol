@@ -20,7 +20,7 @@ error DuplicateSession(address sender, address token);
 /// @param sender The message sender
 /// @param approved The address of the approved creator
 /// @param token The address of the ERC721 Token
-error DuplicateSession(address sender, address approved, address token);
+error NotApproved(address sender, address approved, address token);
 
 /// Bad Session Bounds
 /// @param allocationStart The session's allocation period start
@@ -46,7 +46,7 @@ error RequireMintedERC721Tokens(uint256 balanceOfThis, uint256 maxMintingAmount)
 contract TwamFactory is ERC721TokenReceiver {
   /// @dev Use CloneWithCallData library for cheap deployment
   /// @dev Uses a modified minimal proxy pattern
-  using ClonesWithCallData for address;
+  using ClonesWithImmutableArgs for address;
 
   /// @dev Emit a creation event to track twams
   event TwamDeployed(TwamBase twam);
@@ -79,18 +79,16 @@ contract TwamFactory is ERC721TokenReceiver {
   /// @param depositToken The token to pay for minting
   /// @param maxMintingAmount The maximum amount of tokens to mint (must be minted to this contract)
   /// @param rolloverOption What happens when the minting period ends and the session is over; one of {1, 2, 3}
-  function createTWAM(
+  function createTwam(
     address token,
     address coordinator,
     uint64 allocationStart,
     uint64 allocationEnd,
     uint64 mintingStart,
     uint64 mintingEnd,
-    uint256 resultPrice,
     uint256 minPrice,
-    uint256 depositAmount,
-    uint256 maxMintingAmount,
     address depositToken,
+    uint256 maxMintingAmount,
     uint8 rolloverOption
   ) external returns (TwamBase twamBase) {
     // Prevent Overwriting Sessions
@@ -131,20 +129,23 @@ contract TwamFactory is ERC721TokenReceiver {
         mstore(add(ptr, 0x60), shl(0xc0, mintingEnd))
 
         // Pack 32 byte uint256 values
-        mstore(add(ptr, 0x68), resultPrice)
+        mstore(add(ptr, 0x68), 0) // resultPrice - reserved slot
         mstore(add(ptr, 0x88), minPrice)
-        mstore(add(ptr, 0xa8), depositAmount)
+        mstore(add(ptr, 0xa8), 0) // depositAmount - reserved slot
         mstore(add(ptr, 0xc8), maxMintingAmount)
 
         // Pack a 20 byte address and an 1 byte rollover option
         mstore(add(ptr, 0xe8), shl(0x60, depositToken))
         mstore(add(ptr, 0xfb), rolloverOption)
     }
+
+    // Create the TWAM
     twamBase = TwamBase(
-        address(implementation).cloneWithCallDataProvision(ptr)
+        address(implementation).clone(ptr)
     );
     emit TwamDeployed(twamBase);
 
+    // Record Creation
     createdTwams[token] = address(twamBase);
   }
 
