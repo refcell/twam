@@ -118,6 +118,36 @@ contract TwamBaseTest is DSTestPlus {
     assert(read_minting_end == mintingEnd);
   }
 
+  /// @notice Tests reading the Min Price from Immutable Args
+  function testReadMinPrice() public {
+    uint256 read_min_price = twamBase.readMinPrice();
+    assert(read_min_price == minPrice);
+  }
+
+  /// @notice Tests reading the Maximum Minting Amount from Immutable Args
+  function testReadMaxMintingAmount() public {
+    uint256 read_max_minting_amount = twamBase.readMaxMintingAmount();
+    assert(read_max_minting_amount == maxMintingAmount);
+  }
+
+  /// @notice Tests reading the Deposit Token from Immutable Args
+  function testReadDepositToken() public {
+    address read_deposit_token = twamBase.readDepositToken();
+    assert(read_deposit_token == address(depositToken));
+  }
+
+  /// @notice Tests reading the Rollover Option from Immutable Args
+  function testReadRolloverOption() public {
+    uint8 read_rollover_option = twamBase.readRolloverOption();
+    assert(read_rollover_option == rolloverOption);
+  }
+
+  /// @notice Tests reading the Session Id from Immutable Args
+  function testReadSessionId() public {
+    uint256 read_session_id = twamBase.readSessionId();
+    assert(read_session_id == 1);
+  }
+
     ////////////////////////////////////////////////////
     ///           SESSION MANAGEMENT LOGIC           ///
     ////////////////////////////////////////////////////
