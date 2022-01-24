@@ -142,7 +142,8 @@ contract TwamFactory is ERC721TokenReceiver {
       maxMintingAmount,
       depositToken,
       rolloverOption,
-      sessionId
+      sessionId,
+      address(this)
     );
 
     // Create the TWAM
@@ -150,6 +151,9 @@ contract TwamFactory is ERC721TokenReceiver {
         address(implementation).clone(data)
     );
     emit TwamDeployed(twamBase);
+
+    // Set approval for all the ERC721 Tokens
+    IERC721(token).setApprovalForAll(address(twamBase), true);
 
     // Record Creation
     createdTwams[token] = address(twamBase);

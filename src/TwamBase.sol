@@ -204,6 +204,7 @@ contract TwamBase is Clone {
     address depositToken = readDepositToken();
     uint256 maxMintingAmount = readMaxMintingAmount();
     uint256 minPrice = readMinPrice();
+    address twamFactory = readTwamFactoryAddress();
 
     // MSTORE timestamp is cheaper than double calls
     uint256 timestamp = block.timestamp;
@@ -244,7 +245,7 @@ contract TwamBase is Clone {
 
     // Mint
     for(uint256 i = nextTokenToMint; i < nextTokenToMint + numberToMint; i++) {
-      IERC721(token).safeTransferFrom(address(this), msg.sender, i);
+      IERC721(token).safeTransferFrom(twamFactory, msg.sender, i);
     }
 
     // Only give rewards to coordinator once the ERC721 Tokens are transferred
@@ -339,5 +340,10 @@ contract TwamBase is Clone {
   /// @notice Reads the Session ID
   function readSessionId() public pure returns(uint256) {
     return _getArgUint256(157);
+  }
+
+  /// @notice Reads the Twam Factory Address
+  function readTwamFactoryAddress() public pure returns(address) {
+    return _getArgAddress(189);
   }
 }
