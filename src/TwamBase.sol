@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.11;
 
-import {SafeCastLib} from "@solmate/utils/SafeCastLib.sol";
 import {Clone} from "@clones/Clone.sol";
+import {SafeCastLib} from "@solmate/utils/SafeCastLib.sol";
+import {FixedPointMathLib} from "@solmate/utils/FixedPointMathLib.sol";
 
 import {IERC20} from "./interfaces/IERC20.sol";
 import {IERC721} from "./interfaces/IERC721.sol";
@@ -51,6 +52,8 @@ error InvalidCoordinator(address sender, address coordinator);
 /// @notice Time Weighted Asset Minting Base Clone
 /// @author Andreas Bigger <andreas@nascent.xyz>
 contract TwamBase is Clone {
+  using FixedPointMathLib for uint256;
+
   /// @dev Immutable Session Variables are stored in Calldata using ClonesWithImmutableArgs
 
   /// @notice Maps a session to the amount of deposits
@@ -68,6 +71,12 @@ contract TwamBase is Clone {
   /// @notice Session Rewards for Coordinators
   /// @dev Maps coordinator => token => rewardAmount
   mapping(address => mapping(address => uint256)) public rewards;
+
+  /// @notice Loss Penalty for each depositor
+  /// @dev Fixed-point number where 1e18 represents 100%
+  /// @dev Updates calculated using weighted average
+  /// @dev Maps user => session id => lossPenalty
+  mapping(address => mapping(uint256 => uint256)) public lossPenalty;
 
   /// @notice Token Ids for the ERC721s
   mapping(address => uint256) private tokenIds;
@@ -146,6 +155,15 @@ contract TwamBase is Clone {
     if (timestamp > allocationEnd || timestamp < allocationStart) {
       revert NonAllocation(timestamp, allocationStart, allocationEnd);
     }
+
+    // Update a user's loss penalty
+    uint256 currTotalDeposits = totalDeposits[sessionId];
+    uint256 currLossPenalty = lossPenalty[msg.sender][sessionId];
+    uint256 newLossPenalty = 
+    if(currLossPenalty == 0) {
+      lossPenalty[msg.sender][sessionId] = newLossPenalty;
+    }
+    uint256 newLossPenalty = 
 
     // Transfer the token to this contract
     IERC20(depositToken).transferFrom(msg.sender, address(this), amount);
@@ -273,12 +291,23 @@ contract TwamBase is Clone {
       resultPrice[sessionId] = totalDeposits[sessionId] / maxMintingAmount;
     }
 
+    // TODO: Allow Withdrawals without loss penalty if total user deposits aren't enough to mint
+
+    // TODO: Calculate Loss Penalty
+
     // Remove deposits
     // Will revert on underflow
     deposits[msg.sender][sessionId] -= amount;
     totalDeposits[sessionId] -= amount;
     IERC20(depositToken).transfer(msg.sender, amount);
   }
+
+  ////////////////////////////////////////////////////
+  ///                 LOSS PENALTY                 ///
+  ////////////////////////////////////////////////////
+
+  /// @notice Calculates the Loss Penalty for a depositor
+
 
   ////////////////////////////////////////////////////
   ///            READ SESSION PARAMETERS           ///
