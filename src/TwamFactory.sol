@@ -73,6 +73,7 @@ contract TwamFactory is ERC721TokenReceiver {
   mapping(uint256 => address) public sessions;
 
   /// @notice The next session ID
+  /// @dev initialized to 1 for cheaper initial loads
   uint256 public sessionId = 1;
 
   /// @notice Creates the Factory with the given TwamBase implementation
@@ -163,16 +164,6 @@ contract TwamFactory is ERC721TokenReceiver {
         uint256 _id,
         bytes memory _data
     ) public virtual override returns (bytes4) {
-      // bytes memory data;
-      // address token;
-      // assembly {
-      //   token := mload(calldataload(_data.offset))
-      // }
-      // uint256 length = _data.length;
-      // assembly {
-      //   length := calldataload(_data.offset).length
-      // }
-      // if (length > 32) revert SessionOverwrite();
       address token = abi.decode(_data, (address));
 
       // Make sure there isn't already an approved creator
@@ -181,9 +172,9 @@ contract TwamFactory is ERC721TokenReceiver {
       }
 
       // Verify this token is being transferred by checking the balance of _from
-      // if (IERC721(token).ownerOf(_id) != _from) {
-      //   revert SenderNotOwner();
-      // }
+      if (IERC721(token).ownerOf(_id) != address(this)) {
+        revert SenderNotOwner();
+      }
 
       // Approve the sender as the session creator for 
       approvedCreator[token] = _from;
