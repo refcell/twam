@@ -156,6 +156,7 @@ contract TwamBase is Clone {
   }
 
   /// @notice Withdraws a deposit token from a session
+  /// @dev Only permitted when the session is over
   /// @param amount The amount of the deposit token to withdraw
   function withdraw(uint256 amount) public {
     // Read Calldata Immutables
@@ -170,12 +171,8 @@ contract TwamBase is Clone {
     // MSTORE timestamp is cheaper than double calls
     uint256 timestamp = block.timestamp;
 
-    // Make sure the session is in the allocation period
-    if (
-      (timestamp > allocationEnd || timestamp < allocationStart)
-      &&
-      (timestamp < mintingEnd || rolloverOption != 3) // Allows a user to withdraw deposits if session ends
-      ) {
+    // Allows a user to withdraw deposits if session ends
+    if (timestamp < mintingEnd || rolloverOption != 3) {
       revert NonAllocation(timestamp, allocationStart, allocationEnd);
     }
 
