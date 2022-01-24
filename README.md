@@ -33,33 +33,46 @@ When a TWAM Session is created using the [TwamFactory](./src/TwamFactory.sol)'s 
 `maxMintingAmount` - The maximum number of ERC721 Tokens available for sale.
 `rolloverOption` - Option in {1, 2, 3} indicating what happens when a Session ends.
 
+
 #### TWAM Session Lifecycle
 
+For a given mint's `allocationPeriod` (let's use 24 hours), a given type of asset can be deposited into the [twam](./src/TWAM.sol) contract. Note: during the `allocationPeriod`, the deposit token **cannot** be withdrawn.
+
+Additionally, a loss penalty is calculated with respect to when you deposit in the allocation period. The later you deposit, the more of a penalty you will occur if you choose to forgo minting. This prevents spoofing allocations, helping those who are genuinely interested in minting the ERC721 token.
+
+NOTE: if someones total deposits in a session aren't enough to mint at least one ERC721 token based on price, withdrawals are allowed **without** a penalty.
 
 
+Once the `allocationPeriod` ends, a cooldown period begins with a length of `mintingStart` - `allocationEnd`. At this time, no more deposits are permitted.
 
+Note: there may be no cooldown if `mintingStart` = `allocationEnd`.
 
+At the beginning of the minting period `mintingStart`, each ERC721 can be minted at the price equal to (total allocated assets) / (maximum supply ERC721 tokens) as long as it exceeds the `minPrice` TWAM session parameter.
 
-Requirements: `maxMintingAmount` number of erc721 tokens are minted to the `TWAM` contract in advance.
-
-For a given mint's `allocationPeriod` (let's use 24 hours), a given type of asset can be deposited into the [twam](./src/TWAM.sol) contract. Note: during the `allocationPeriod`, the deposit token can be withdrawn.
-
-Once the `allocationPeriod` ends, a cooldown period begins with a length of `mintingStart` - `allocationEnd`.
-
-Note: the cooldown may be 0.
-
-At the beginning of the minting period `mintingStart`, each erc721 can be minted at the price equal to (total allocated assets) / (maximum supply erc721 tokens) as long as it exceeds the `minimumPrice`.
-
-If the `minimumPrice` is not reached, minting is prohibited, and nothing happens during the minting period.
+If the `minPrice` is not reached, minting is prohibited, and nothing happens during the minting period.
 
 If all tokens are minted at the end of the minting period, the session is completed.
 
-Otherwise (when the `minimumPrice` isn't met or not all tokens are minted), one of three options are available:
-1. The TWAM process starts over again.
+Otherwise (when the `minimumPrice` isn't met or not all tokens are minted), one of three options are available based on the Session's `rolloverOption`:
+1. The TWAM Session starts over again.
 2. Minting is enabled at the max{`resultPrice`, `minimumPrice`}.
 3. The session is ended.
 
-This option is denoted as the session's `rolloverOption`.
+The Session's `rolloverOption` may only be one of these three.
+
+
+#### Minter Functions
+
+`deposit(uint256)` - Deposits a `uint256` amount into the Session during the allocation period.
+`withdraw(uint256)` - Allows a user to withdraw after the Session ends (`mintingEnd` is passed) and the `rolloverOption` is 3.
+`mint(uint256)` - Mints a number of ERC721 tokens to a user during the minting period as calculated by `uint256` / `resultPrice` where `resultPrice` is the final price per ERC721 token.
+`forgo(uint256)` - Allows a user to withdraw their deposited token, giving up their minting allocation. This may incur a loss penalty as a function of when the deposits are made.
+
+
+#### Coordinator Functions
+
+`rollover()` - Allows the coordinator to rollover the Session if the minting is over - only sets the `rolloverOffset` if the `rolloverOption` is one of {1,2}.
+`withdrawRewards()` - Withdraws the deposit tokens earned by the coordinator in exchange for the minted ERC721 Tokens.
 
 ## Blueprint
 
