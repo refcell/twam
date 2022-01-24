@@ -6,6 +6,40 @@ A minting harness enabling time-weighted assets to determine minting prices.
 
 ## How it works
 
+[TwamFactory](./src/TwamFactory.sol) manages creating TWAM Sessions.
+
+A given TWAM Session can be created permissionlessly. With two requirements:
+- The session creator sets the TwamFactory ERC721 token balance to at least `maxMiningAmount`.
+- The session creator then transfers 1 ERC721 token to the TwamFactory to verify they are the owner of the ERC721 Tokens.
+
+The singular ERC721 Token transfer is required to trigger the [TwamFactory](./src/TwamFactory.sol)'s `onERC721Received` hook that sets the approved session creator.
+
+This comes with assumptions:
+- The creator owns all ERC721 Tokens to start with before doing a sale (or they risk another owner frontrunning the session creation).
+- ERC721 Tokens [0-maxMintingAmount] are owned by the TwamFactory since sales are done sequentially.
+
+When a TWAM Session is created using the [TwamFactory](./src/TwamFactory.sol)'s `createTwam` function, a minimal proxy contract is created using the arguments as immutables (h/t [ZeframLou](https://github.com/ZeframLou/clones-with-immutable-args)).
+
+#### TWAM Session Parameters
+
+`token` - The address of the ERC721 Contract.
+`coordinator` - The sale profit receiver.
+`allocationStart` - The timestamp when the allocation period begins.
+`allocationEnd` - The timestamp when the allocation period ends.
+`mintingStart` - The timestamp when the minting period begins.
+`mintingEnd` - The timestamp when the minting period ends.
+`minPrice` - The minimum price per ERC721 token.
+`depositToken` - The address of the ERC20 token that is paid by users.
+`maxMintingAmount` - The maximum number of ERC721 Tokens available for sale.
+`rolloverOption` - Option in {1, 2, 3} indicating what happens when a Session ends.
+
+#### TWAM Session Lifecycle
+
+
+
+
+
+
 Requirements: `maxMintingAmount` number of erc721 tokens are minted to the `TWAM` contract in advance.
 
 For a given mint's `allocationPeriod` (let's use 24 hours), a given type of asset can be deposited into the [twam](./src/TWAM.sol) contract. Note: during the `allocationPeriod`, the deposit token can be withdrawn.
