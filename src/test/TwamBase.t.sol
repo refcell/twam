@@ -29,47 +29,63 @@ contract TwamBaseTest is DSTestPlus {
 
     /// @notice Testing suite precursors
     function setUp() public {
-        TwamBase exampleClone = new TwamBase();
-        twamFactory = new TwamFactory(exampleClone);
+      TwamBase exampleClone = new TwamBase();
+      twamFactory = new TwamFactory(exampleClone);
 
-        // Creat Mock Tokens
-        depositToken = new MockERC20("Token", "TKN", 18);
-        mockToken = new MockERC721("Token", "TKN");
-        badMockERC721 = new MockERC721("Token", "TKN");
-
-        // Mint all erc721 tokens to the twam
-        for(uint256 i = 1; i < TOKEN_SUPPLY; i++) {
-            mockToken.mint(address(twamFactory), i);
-        }
-        // Save the first token to transfer to set the permissioned session creator
-        // mockToken.mint(COORDINATOR, 0);
-        // mockToken.transfer(address(twamFactory), 0);
-    }
-
-    /// @notice Creates a Twam from Factory
-    function xtestCreateTwam() public {
+      // Creat Mock Tokens
+      depositToken = new MockERC20("Token", "TKN", 18);
+      mockToken = new MockERC721("Token", "TKN");
+      badMockERC721 = new MockERC721("Token", "TKN");
+      
+      // Create the TWAM Session
       uint64 t = SafeCastLib.safeCastTo64(block.timestamp);
-
-      // We should expect a NotApproved revert
-      vm.expectRevert(abi.encodeWithSignature(
-        "NotApproved(address,address,address)",
-        address(this),
-        address(0),
-        address(mockToken)
-      ));
-      twamBase = twamFactory.createTwam(
-        address(mockToken),
-        COORDINATOR,
-        t + 10, // allocationStart,
-        t + 15, // allocationEnd,
-        t + 20, // mintingStart,
-        t + 25, // mintingEnd,
-        100, // minPrice,
-        address(depositToken),
-        TOKEN_SUPPLY, // maxMintingAmount,
-        1 // rolloverOption
+      startHoax(COORDINATOR, COORDINATOR, type(uint256).max);
+      mockToken.mint(COORDINATOR, 0);
+      mockToken.approve(COORDINATOR, 0);
+      mockToken.safeTransferFrom(
+        COORDINATOR,                          // from
+        address(twamFactory),                 // to
+        0,                                    // id
+        abi.encode(address(mockToken))        // data
       );
+      for(uint256 i = 1; i < TOKEN_SUPPLY; i++) {
+          mockToken.mint(address(twamFactory), i);
+      }
+      twamBase = twamFactory.createTwam(
+        address(mockToken),     // token
+        COORDINATOR,            // coordinator
+        t + 10,                 // allocationStart,
+        t + 15,                 // allocationEnd,
+        t + 20,                 // mintingStart,
+        t + 25,                 // mintingEnd,
+        100,                    // minPrice,
+        address(depositToken),  // depositToken
+        TOKEN_SUPPLY,           // maxMintingAmount,
+        1                       // rolloverOption
+      );
+      vm.stopPrank();
     }
+
+
+
+
+
+
+  ////////////////////////////////////////////////////
+  ///            READ SESSION PARAMETERS           ///
+  ////////////////////////////////////////////////////
+
+  /// @notice Creates a Twam from Factory
+  function testReadToken() public {
+    // Anyone should be able to read the immutable session args
+    address read_token = twamBase.readToken();
+    assertEq(read_token, address(mockToken));
+  }
+
+  
+
+
+
 
     ////////////////////////////////////////////////////
     ///           SESSION MANAGEMENT LOGIC           ///
@@ -86,5 +102,7 @@ contract TwamBaseTest is DSTestPlus {
     ////////////////////////////////////////////////////
     ///            SESSION MINTING PERIOD            ///
     ////////////////////////////////////////////////////
+
+
 
 }
