@@ -164,6 +164,7 @@ contract TwamBase is Clone {
 
     // Calculate Loss Penalty
     uint256 newLossPenalty = simulateLossPenalty(amount, allocationStart, allocationEnd, timestamp);
+    if (newLossPenalty > YAD) newLossPenalty = YAD;
 
     // Set the penalty if 0
     if(currLossPenalty == 0) {
