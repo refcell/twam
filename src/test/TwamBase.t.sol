@@ -419,10 +419,10 @@ contract TwamBaseTest is DSTestPlus {
     // Jump to minting period
     vm.warp(mintingStart);
 
-    // Mock first user mints
+    // Mock first user forgos
     startHoax(firstUser, firstUser, type(uint256).max);
 
-    // Then they should successfully be able to mint
+    // Then they should successfully be able to forgo
     twamBase.forgo(TOKEN_SUPPLY);
     assert(mockToken.balanceOf(address(twamFactory)) == TOKEN_SUPPLY);
     assert(mockToken.balanceOf(address(firstUser)) == 0);
@@ -432,13 +432,79 @@ contract TwamBaseTest is DSTestPlus {
     assert(twamBase.resultPrice(1) == 2);
     vm.stopPrank();
 
-    // Mock second user mints
+    // Mock second user forgos
     startHoax(secondUser, secondUser, type(uint256).max);
 
     twamBase.forgo(TOKEN_SUPPLY);
     assert(mockToken.balanceOf(address(twamFactory)) == TOKEN_SUPPLY);
     assert(mockToken.balanceOf(address(secondUser)) == 0);
     assert(depositToken.balanceOf(address(twamBase)) == 0);
+
+    // Check that the session `resultPrice` is still correct
+    assert(twamBase.resultPrice(1) == 2);
+    vm.stopPrank();
+  }
+
+  /// @notice Tests forgoing a mint with a loss penalty
+  function testForgoWithLossPenalty() public {
+    // Jump to the middle of the allocation period
+    vm.warp(allocationEnd - allocationStart + allocationStart);
+
+    // Create Users
+    address firstUser = address(1);
+    address secondUser = address(2);
+    depositToken.mint(firstUser, 1e18);
+    depositToken.mint(secondUser, 1e18);
+
+    // Users Deposit
+    startHoax(firstUser, firstUser, type(uint256).max);
+    depositToken.approve(address(twamBase), 1e18);
+    twamBase.deposit(TOKEN_SUPPLY);
+    vm.stopPrank();
+    startHoax(secondUser, secondUser, type(uint256).max);
+    depositToken.approve(address(twamBase), 1e18);
+    twamBase.deposit(TOKEN_SUPPLY);
+
+    // User can't forgo before minting period starts
+    vm.expectRevert(abi.encodeWithSignature(
+        "NonMinting(uint256,uint64,uint64)",
+        allocationEnd - allocationStart + allocationStart,
+        mintingStart,
+        mintingEnd
+    ));
+    twamBase.forgo(TOKEN_SUPPLY);
+
+    vm.stopPrank();
+
+    // Jump to minting period
+    vm.warp(mintingStart);
+
+    // Mock first user forgos
+    startHoax(firstUser, firstUser, type(uint256).max);
+
+    // Then they should successfully be able to forgo
+    twamBase.forgo(TOKEN_SUPPLY);
+    assert(mockToken.balanceOf(address(twamFactory)) == TOKEN_SUPPLY);
+    assert(mockToken.balanceOf(address(firstUser)) == 0);
+
+    // Check that the loss penalty came into effect
+    // assert(depositToken.balanceOf(firstUser) == TOKEN_SUPPLY);
+    assert(depositToken.balanceOf(address(twamBase)) >= TOKEN_SUPPLY);
+
+    // Check that the session `resultPrice` is correct
+    assert(twamBase.resultPrice(1) == 2);
+    vm.stopPrank();
+
+    // Mock second user forgos
+    startHoax(secondUser, secondUser, type(uint256).max);
+
+    twamBase.forgo(TOKEN_SUPPLY);
+    assert(mockToken.balanceOf(address(twamFactory)) == TOKEN_SUPPLY);
+    assert(mockToken.balanceOf(address(secondUser)) == 0);
+
+    // Check the loss penalty
+    assert(depositToken.balanceOf(secondUser) < TOKEN_SUPPLY);
+    assert(depositToken.balanceOf(address(twamBase)) >= 0);
 
     // Check that the session `resultPrice` is still correct
     assert(twamBase.resultPrice(1) == 2);
