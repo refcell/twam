@@ -236,68 +236,8 @@ contract TwamBaseTest is DSTestPlus {
     vm.stopPrank();
   }
 
-  /// @notice Test withdrawals
-  function testWithdrawals() public {
-    // Jump to after the allocation period
-    vm.warp(allocationEnd + 1);
-
-    // Expect Revert when we are after the allocation period
-    vm.expectRevert(
-        abi.encodeWithSignature(
-            "NonAllocation(uint256,uint64,uint64)",
-            allocationEnd + 1,
-            allocationStart,
-            allocationEnd
-        )
-    );
-    twamBase.withdraw(TOKEN_SUPPLY);
-
-    // Reset to before the allocation period
-    vm.warp(allocationStart - 1);
-
-    // Expect Revert when we are before the allocation period
-    vm.expectRevert(
-        abi.encodeWithSignature(
-            "NonAllocation(uint256,uint64,uint64)",
-            allocationStart - 1,
-            allocationStart,
-            allocationEnd
-        )
-    );
-    twamBase.withdraw(TOKEN_SUPPLY);
-
-    // Jump to allocation period
-    vm.warp(allocationStart);
-
-    // Create Mock Users
-    address firstUser = address(1);
-    address secondUser = address(2);
-
-    // Give them depositToken balances
-    depositToken.mint(firstUser, 1e18);
-    depositToken.mint(secondUser, 1e18);
-
-    // Mock first user deposits and withdrawals
-    startHoax(firstUser, firstUser, type(uint256).max);
-    depositToken.approve(address(twamBase), 1e18); // Approve the TWAMBase to transfer the depositToken
-    twamBase.deposit(TOKEN_SUPPLY);
-    assert(depositToken.balanceOf(address(twamBase)) == TOKEN_SUPPLY);
-    twamBase.withdraw(TOKEN_SUPPLY);
-    assert(depositToken.balanceOf(address(twamBase)) == 0);
-    vm.stopPrank();
-
-    // Mock second user deposits and withdrawals
-    startHoax(secondUser, secondUser, type(uint256).max);
-    depositToken.approve(address(twamBase), 1e18); // Approve the TWAMBase to transfer the depositToken
-    twamBase.deposit(TOKEN_SUPPLY);
-    assert(depositToken.balanceOf(address(twamBase)) == TOKEN_SUPPLY);
-    twamBase.withdraw(TOKEN_SUPPLY);
-    assert(depositToken.balanceOf(address(twamBase)) == 0);
-    vm.stopPrank();
-  }
-
   /// @notice Tests users can withdraw after minting ends when session rollover = 3
-  function testWithdrawRollover3() public {
+  function testWithdrawals() public {
     // Replicate Base Variables
     TwamFactory twamFactory2 = new TwamFactory(exampleClone);
 
