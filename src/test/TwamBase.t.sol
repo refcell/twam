@@ -19,13 +19,20 @@ contract TwamBaseTest is DSTestPlus {
     /// @dev Contracts
     TwamBase public twamBase;         // Twam Base (Clone)
     TwamFactory public twamFactory;   // Twam Factory
-    MockERC20 public depositToken;    // Mock ERC20 Deposit Token
     MockERC721 public badMockERC721;  // Mock Invalid ERC721 Token
-    MockERC721 public mockToken;      // Mock ERC721 Token
 
-    /// @dev Constants
-    uint256 public constant TOKEN_SUPPLY = 10_000;
+    /// @dev Twam Session Arguments
+    MockERC721 public mockToken;      // Mock ERC721 Token
     address public constant COORDINATOR = 0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B;
+    uint64 public allocationStart;
+    uint64 public allocationEnd;
+    uint64 public mintingStart;
+    uint64 public mintingEnd;
+    uint256 public minPrice; 
+    MockERC20 public depositToken;    // Mock ERC20 Deposit Token
+    uint256 public constant TOKEN_SUPPLY = 10_000;
+    uint256 public maxMintingAmount = TOKEN_SUPPLY;
+    uint8 public rolloverOption;
 
     /// @notice Testing suite precursors
     function setUp() public {
@@ -52,16 +59,16 @@ contract TwamBaseTest is DSTestPlus {
           mockToken.mint(address(twamFactory), i);
       }
       twamBase = twamFactory.createTwam(
-        address(mockToken),     // token
-        COORDINATOR,            // coordinator
-        t + 10,                 // allocationStart,
-        t + 15,                 // allocationEnd,
-        t + 20,                 // mintingStart,
-        t + 25,                 // mintingEnd,
-        100,                    // minPrice,
-        address(depositToken),  // depositToken
-        TOKEN_SUPPLY,           // maxMintingAmount,
-        1                       // rolloverOption
+        address(mockToken),       // token
+        COORDINATOR,              // coordinator
+        allocationStart = t + 10, // allocationStart,
+        allocationEnd = t + 15,   // allocationEnd,
+        mintingStart = t + 20,    // mintingStart,
+        mintingEnd = t + 25,      // mintingEnd,
+        minPrice = 100,           // minPrice,
+        address(depositToken),    // depositToken
+        TOKEN_SUPPLY,             // maxMintingAmount,
+        rolloverOption = 1        // rolloverOption
       );
       vm.stopPrank();
     }
@@ -86,10 +93,30 @@ contract TwamBaseTest is DSTestPlus {
     address read_coordinator = twamBase.readCoordinator();
     assertEq(read_coordinator, COORDINATOR);
   }
-  
 
+  /// @notice Tests reading the Allocation Start from Immutable Args
+  function testReadAllocationStart() public {
+    uint64 read_alloc_start = twamBase.readAllocationStart();
+    assert(read_alloc_start == allocationStart);
+  }
 
+  /// @notice Tests reading the Allocation End from Immutable Args
+  function testReadAllocationEnd() public {
+    uint64 read_alloc_end = twamBase.readAllocationEnd();
+    assert(read_alloc_end == allocationEnd);
+  }
 
+  /// @notice Tests reading the Minting Start from Immutable Args
+  function testReadMintingStart() public {
+    uint64 read_minting_start = twamBase.readMintingStart();
+    assert(read_minting_start == mintingStart);
+  }
+
+  /// @notice Tests reading the Minting End from Immutable Args
+  function testReadMintingEnd() public {
+    uint64 read_minting_end = twamBase.readMintingEnd();
+    assert(read_minting_end == mintingEnd);
+  }
 
     ////////////////////////////////////////////////////
     ///           SESSION MANAGEMENT LOGIC           ///
