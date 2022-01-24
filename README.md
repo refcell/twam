@@ -31,13 +31,16 @@ This option is denoted as the session's `rolloverOption`.
 
 ```ml
 lib
+├─ clones-with-immutable-args — https://github.com/ZeframLou/clones-with-immutable-args
 ├─ ds-test — https://github.com/dapphub/ds-test
 ├─ forge-std — https://github.com/brockelmore/forge-std
 ├─ solmate — https://github.com/Rari-Capital/solmate
 src
 ├─ tests
-│  └─ TWAM.t — "TWAM Tests"
-└─ TWAM — "Time Weighted Asset Mint Contract"
+│  ├─ TwamBase.t — "Primary TWAM Functionality Tests"
+│  └─ TwamFactory.t — "Proxy and TwamBase Deployment Tests"
+├─ TwamBase — "Time Weighted Asset Mint Logic Contract"
+└─ TwamFactory — "Minimal Proxy Deployer"
 ```
 
 ## Development
@@ -80,6 +83,7 @@ make test
 - [foundry](https://github.com/gakonst/foundry)
 - [solmate](https://github.com/Rari-Capital/solmate)
 - [forge-std](https://github.com/brockelmore/forge-std)
+- [clones-with-immutable-args](https://github.com/ZeframLou/clones-with-immutable-args)
 - [foundry-toolchain](https://github.com/onbjerg/foundry-toolchain) by [onbjerg](https://github.com/onbjerg).
 - [forge-starter](https://github.com/abigger87/forge-starter) by [abigger87](https://github.com/abigger87).
 - [forge-template](https://github.com/FrankieIsLost/forge-template) by [FrankieIsLost](https://github.com/FrankieIsLost).
