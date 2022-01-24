@@ -359,6 +359,92 @@ contract TwamBaseTest is DSTestPlus {
     vm.stopPrank();
   }
 
+  ////////////////////////////////////////////////////
+  ///            SESSION MINTING PERIOD            ///
+  ////////////////////////////////////////////////////
+
+  /// @notice Tests minting period
+  function testMints() public {
+    // Jump to allocation period
+    vm.warp(allocationStart);
+
+    // Create Users
+    address firstUser = address(1);
+    address secondUser = address(2);
+    depositToken.mint(firstUser, 1e18);
+    depositToken.mint(secondUser, 1e18);
+
+    // Users Deposit
+    startHoax(firstUser, firstUser, type(uint256).max);
+    depositToken.approve(address(twamBase), 1e18);
+    twamBase.deposit(TOKEN_SUPPLY);
+    vm.stopPrank();
+    startHoax(secondUser, secondUser, type(uint256).max);
+    depositToken.approve(address(twamBase), 1e18);
+    twamBase.deposit(TOKEN_SUPPLY);
+
+    // User can't mint before minting period starts
+    vm.expectRevert(
+      abi.encodeWithSignature(
+        "NonMinting(uint256,uint64,uint64)",
+        allocationStart,
+        mintingStart,
+        mintingEnd
+    ));
+    twamBase.mint(TOKEN_SUPPLY);
+
+    vm.stopPrank();
+
+    // Jump to minting period
+    vm.warp(mintingStart);
+
+    // Mock first user mints
+    startHoax(firstUser, firstUser, type(uint256).max);
+
+    // User shouldn't be able to mint more than their deposits
+    vm.expectRevert(
+      abi.encodeWithSignature(
+        "InsufficientDesposits(address,uint256,uint256)",
+        firstUser,
+        TOKEN_SUPPLY,
+        2 * TOKEN_SUPPLY
+      )
+    );
+    twamBase.mint(2 * TOKEN_SUPPLY);
+
+    // Then they should successfully be able to mint
+    twamBase.mint(TOKEN_SUPPLY);
+    assert(mockToken.balanceOf(address(twamFactory)) == TOKEN_SUPPLY / 2);
+    assert(mockToken.balanceOf(address(firstUser)) == TOKEN_SUPPLY / 2);
+    assert(twamBase.rewards(COORDINATOR, address(depositToken)) == TOKEN_SUPPLY);
+    assert(depositToken.balanceOf(address(twamBase)) == 2 * TOKEN_SUPPLY);
+
+    // Check that the session `resultPrice` is correct
+    assert(twamBase.resultPrice(1) == 2);
+    vm.stopPrank();
+
+    // Mock second user mints
+    startHoax(secondUser, secondUser, type(uint256).max);
+
+    // User shouldn't be able to mint more than their deposits
+    vm.expectRevert(abi.encodeWithSignature(
+        "InsufficientDesposits(address,uint256,uint256)",
+        secondUser, TOKEN_SUPPLY, 2 * TOKEN_SUPPLY
+    ));
+    twamBase.mint(2 * TOKEN_SUPPLY);
+
+    twamBase.mint(TOKEN_SUPPLY);
+    assert(mockToken.balanceOf(address(twamFactory)) == 0);
+    assert(mockToken.balanceOf(address(secondUser)) == TOKEN_SUPPLY / 2);
+    assert(twamBase.rewards(COORDINATOR, address(depositToken)) == 2 * TOKEN_SUPPLY);
+    assert(depositToken.balanceOf(address(twamBase)) == 2 * TOKEN_SUPPLY);
+
+    // Check that the session `resultPrice` is still correct
+    assert(twamBase.resultPrice(1) == 2);
+
+    vm.stopPrank();
+  }
+
 
 
 
