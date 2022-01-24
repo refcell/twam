@@ -180,8 +180,61 @@ contract TwamBaseTest is DSTestPlus {
   ///           SESSION ALLOCATION PERIOD          ///
   ////////////////////////////////////////////////////
 
-  /// @notice Tests depositing into the TWAM Session
-  function testTwamDeposit() public {}
+  /// @notice Test deposits
+  function testDeposit() public {
+    // Jump to after the allocation period
+    vm.warp(allocationEnd + 1);
+
+    // Expect Revert when we are after the allocation period
+    vm.expectRevert(
+        abi.encodeWithSignature(
+            "NonAllocation(uint256,uint64,uint64)",
+            allocationEnd + 1,
+            allocationStart,
+            allocationEnd
+        )
+    );
+    twamBase.deposit(TOKEN_SUPPLY);
+
+    // Reset to before the allocation period
+    vm.warp(allocationStart - 1);
+
+    // Expect Revert when we are before the allocation period
+    vm.expectRevert(
+        abi.encodeWithSignature(
+            "NonAllocation(uint256,uint64,uint64)",
+            allocationStart - 1,
+            allocationStart,
+            allocationEnd
+        )
+    );
+    twamBase.deposit(TOKEN_SUPPLY);
+
+    // Jump to allocation period
+    vm.warp(allocationStart);
+
+    // Create Mock Users
+    address firstUser = address(1);
+    address secondUser = address(2);
+
+    // Give them depositToken balances
+    depositToken.mint(firstUser, 1e18);
+    depositToken.mint(secondUser, 1e18);
+
+    // Mock first user deposits
+    startHoax(firstUser, firstUser, type(uint256).max);
+    depositToken.approve(address(twamBase), 1e18); // Approve the twamBase to transfer the depositToken
+    twamBase.deposit(TOKEN_SUPPLY);
+    assert(depositToken.balanceOf(address(twamBase)) == TOKEN_SUPPLY);
+    vm.stopPrank();
+
+    // Mock second user deposits
+    startHoax(secondUser, secondUser, type(uint256).max);
+    depositToken.approve(address(twamBase), 1e18); // Approve the twamBase to transfer the depositToken
+    twamBase.deposit(TOKEN_SUPPLY);
+    assert(depositToken.balanceOf(address(twamBase)) == 2 * TOKEN_SUPPLY);
+    vm.stopPrank();
+  }
 
 
   ////////////////////////////////////////////////////
