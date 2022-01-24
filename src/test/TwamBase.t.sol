@@ -445,8 +445,65 @@ contract TwamBaseTest is DSTestPlus {
     vm.stopPrank();
   }
 
+  /// @notice Tests forgoing a mint
+  function testForgo() public {
+    // Jump to allocation period
+    vm.warp(allocationStart);
 
+    // Create Users
+    address firstUser = address(1);
+    address secondUser = address(2);
+    depositToken.mint(firstUser, 1e18);
+    depositToken.mint(secondUser, 1e18);
 
+    // Users Deposit
+    startHoax(firstUser, firstUser, type(uint256).max);
+    depositToken.approve(address(twamBase), 1e18);
+    twamBase.deposit(TOKEN_SUPPLY);
+    vm.stopPrank();
+    startHoax(secondUser, secondUser, type(uint256).max);
+    depositToken.approve(address(twamBase), 1e18);
+    twamBase.deposit(TOKEN_SUPPLY);
+
+    // User can't forgo before minting period starts
+    vm.expectRevert(abi.encodeWithSignature(
+        "NonMinting(uint256,uint64,uint64)",
+        allocationStart,
+        mintingStart,
+        mintingEnd
+    ));
+    twamBase.forgo(TOKEN_SUPPLY);
+
+    vm.stopPrank();
+
+    // Jump to minting period
+    vm.warp(mintingStart);
+
+    // Mock first user mints
+    startHoax(firstUser, firstUser, type(uint256).max);
+
+    // Then they should successfully be able to mint
+    twamBase.forgo(TOKEN_SUPPLY);
+    assert(mockToken.balanceOf(address(twamFactory)) == TOKEN_SUPPLY);
+    assert(mockToken.balanceOf(address(firstUser)) == 0);
+    assert(depositToken.balanceOf(address(twamBase)) == TOKEN_SUPPLY);
+
+    // Check that the session `resultPrice` is correct
+    assert(twamBase.resultPrice(1) == 2);
+    vm.stopPrank();
+
+    // Mock second user mints
+    startHoax(secondUser, secondUser, type(uint256).max);
+
+    twamBase.forgo(TOKEN_SUPPLY);
+    assert(mockToken.balanceOf(address(twamFactory)) == TOKEN_SUPPLY);
+    assert(mockToken.balanceOf(address(secondUser)) == 0);
+    assert(depositToken.balanceOf(address(twamBase)) == 0);
+
+    // Check that the session `resultPrice` is still correct
+    assert(twamBase.resultPrice(1) == 2);
+    vm.stopPrank();
+  }
 
   ////////////////////////////////////////////////////
   ///            READ SESSION PARAMETERS           ///
