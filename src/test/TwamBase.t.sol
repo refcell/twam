@@ -75,13 +75,17 @@ contract TwamBaseTest is DSTestPlus {
   ///            READ SESSION PARAMETERS           ///
   ////////////////////////////////////////////////////
 
-  /// @notice Creates a Twam from Factory
+  /// @notice Tests reading the ERC721 Token from Immutable Args
   function testReadToken() public {
-    // Anyone should be able to read the immutable session args
     address read_token = twamBase.readToken();
     assertEq(read_token, address(mockToken));
   }
 
+  /// @notice Tests reading the Coordinator from Immutable Args
+  function testReadCoordinator() public {
+    address read_coordinator = twamBase.readCoordinator();
+    assertEq(read_coordinator, COORDINATOR);
+  }
   
 
 
