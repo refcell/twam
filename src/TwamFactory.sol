@@ -166,7 +166,7 @@ contract TwamFactory is ERC721TokenReceiver {
         address _operator,
         address _from,
         uint256 _id,
-        bytes memory _data
+        bytes calldata _data
     ) public virtual override returns (bytes4) {
       address token = abi.decode(_data, (address));
 
